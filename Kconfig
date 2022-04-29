@@ -4,8 +4,9 @@
 # SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
 #
 menuconfig LCZ_BLE_GW_DM
-    bool "LC BLE Gateway Device Manager"
-    depends on LCZ_NETWORK_MONITOR
+	bool "LC BLE Gateway Device Manager"
+	depends on LCZ_NETWORK_MONITOR
+	depends on FRAMEWORK
 
 if LCZ_BLE_GW_DM
 
@@ -14,13 +15,26 @@ module-str=LCZ_BLE_GW_DM
 source "subsys/logging/Kconfig.template.log_config"
 
 config LCZ_BLE_GW_DM_THREAD_PRIORITY
-    int "Preemptible thread priority"
-    range 0 NUM_PREEMPT_PRIORITIES
-    default 0
+	int "Preemptible thread priority"
+	range 0 NUM_PREEMPT_PRIORITIES
+	default 0
 
 config LCZ_BLE_GW_DM_THREAD_STACK_SIZE
-    int "Stack size"
-    default 2048
+	int "Stack size"
+	default 2048
 
+menuconfig LCZ_BLE_GW_DM_SETTINGS
+	bool "BLE Gateway Device Manager Settings"
+
+if LCZ_BLE_GW_DM_SETTINGS
+
+config LCZ_BLE_GW_DM_CONNECTION_DELAY
+	int "DM connection delay"
+	default 30
+	help
+	  Time in seconds to delay before connecting to device management
+	  services after the network connection is ready.
+
+endif # LCZ_BLE_GW_DM_SETTINGS
 
 endif # LCZ_BLE_GW_DM
