@@ -7,6 +7,7 @@ menuconfig LCZ_BLE_GW_DM
 	bool "LC BLE Gateway Device Manager"
 	depends on LCZ_NETWORK_MONITOR
 	depends on FRAMEWORK
+	depends on LCZ_LWM2M_CLIENT
 
 if LCZ_BLE_GW_DM
 
@@ -30,10 +31,15 @@ if LCZ_BLE_GW_DM_SETTINGS
 
 config LCZ_BLE_GW_DM_CONNECTION_DELAY
 	int "DM connection delay"
-	default 30
 	help
 	  Time in seconds to delay before connecting to device management
 	  services after the network connection is ready.
+
+config LCZ_BLE_GW_DM_CONNECTION_TIMEOUT
+	int "DM connection timeout"
+	help
+	  Time in seconds to wait for connection timeout before restarting
+	  the connection sequence.
 
 endif # LCZ_BLE_GW_DM_SETTINGS
 
