@@ -18,6 +18,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include "lcz_network_monitor.h"
 #include "lcz_lwm2m_client.h"
 #include "lcz_ble_gw_dm_task.h"
+#if defined(CONFIG_ATTR)
+#include "attr.h"
+#endif
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -112,6 +115,7 @@ static bool timer_expired(void)
 static void gw_dm_fsm(void)
 {
 	int ret;
+	char *ep_name;
 
 	switch (gwto.state) {
 	case GW_DM_STATE_WAIT_FOR_NETWORK:
@@ -138,8 +142,12 @@ static void gw_dm_fsm(void)
 		} else {
 			gwto.lwm2m_connection_err = false;
 			gwto.timer = gwto.dm_connection_timeout_seconds;
-			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_LWM2M_CLIENT_ENDPOINT_NAME,
-						       LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+			ep_name = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_endpoint);
+#else
+			ep_name = CONFIG_LCZ_LWM2M_CLIENT_ENDPOINT_NAME;
+#endif
+			ret = lcz_lwm2m_client_connect(ep_name, LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
 			if (ret < 0) {
 				set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 			} else {
