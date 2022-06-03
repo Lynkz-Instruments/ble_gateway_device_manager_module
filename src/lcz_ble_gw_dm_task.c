@@ -26,7 +26,6 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /* Local Constant, Macro and Type Definitions                                                     */
 /**************************************************************************************************/
 #define GW_DM_TASK_QUEUE_DEPTH 8
-#define DM_LWM2M_CLIENT_INDEX 0
 
 enum gw_dm_state {
 	GW_DM_STATE_WAIT_FOR_NETWORK = 0,
@@ -58,7 +57,8 @@ static void gw_dm_fsm(void);
 static bool timer_expired(void);
 static void set_state(enum gw_dm_state next_state);
 static char *state_to_string(enum gw_dm_state state);
-static void lwm2m_client_connected_event(int lwm2m_client_index, bool connected, enum lwm2m_rd_client_event client_event);
+static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_client_index,
+					 bool connected, enum lwm2m_rd_client_event client_event);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -148,7 +148,8 @@ static void gw_dm_fsm(void)
 #else
 			ep_name = CONFIG_LCZ_LWM2M_CLIENT_ENDPOINT_NAME;
 #endif
-			ret = lcz_lwm2m_client_connect(DM_LWM2M_CLIENT_INDEX, -1, -1, ep_name, LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
+			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, -1, -1, ep_name,
+						       LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
 			if (ret < 0) {
 				set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 			} else {
@@ -176,9 +177,9 @@ static void gw_dm_fsm(void)
 		break;
 	case GW_DM_STATE_DISCONNECT_DM:
 		if (!gwto.network_ready) {
-			lcz_lwm2m_client_disconnect(DM_LWM2M_CLIENT_INDEX, false);
+			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
 		} else {
-			lcz_lwm2m_client_disconnect(DM_LWM2M_CLIENT_INDEX, true);
+			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, true);
 		}
 		set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 		break;
@@ -218,10 +219,10 @@ static void nm_event_callback(enum lcz_nm_event event)
 	}
 }
 
-static void lwm2m_client_connected_event(int lwm2m_client_index, bool connected, enum lwm2m_rd_client_event client_event)
+static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_client_index,
+					 bool connected, enum lwm2m_rd_client_event client_event)
 {
-	if(lwm2m_client_index == DM_LWM2M_CLIENT_INDEX)
-	{
+	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		gwto.lwm2m_connected = connected;
 		switch (client_event) {
 		case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
