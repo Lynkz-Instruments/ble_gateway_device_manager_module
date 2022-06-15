@@ -47,4 +47,27 @@ config LCZ_BLE_GW_DM_CONNECTION_TIMEOUT
 
 endif # LCZ_BLE_GW_DM_SETTINGS
 
+menuconfig LCZ_BLE_GW_DM_MEMFAULT
+	bool "Memfault data reporting"
+	depends on LCZ_MEMFAULT
+
+if LCZ_BLE_GW_DM_MEMFAULT
+
+config LCZ_BLE_GW_DM_MEMFAULT_THREAD_PRIORITY
+	int "Preemptible thread priority"
+	range 0 NUM_PREEMPT_PRIORITIES
+	default 0
+
+config LCZ_BLE_GW_DM_MEMFAULT_THREAD_STACK_SIZE
+	int "Stack size"
+	default 3072
+
+config LCZ_BLE_GW_DM_MEMFAULT_REPORT_PERIOD_SECONDS
+	int "Report period"
+	default 3600
+	help
+	  How often to periodically push memfault data (in seconds)
+
+endif # LCZ_BLE_GW_DM_MEMFAULT
+
 endif # LCZ_BLE_GW_DM

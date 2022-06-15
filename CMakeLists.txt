@@ -13,5 +13,6 @@ zephyr_include_directories(include)
 zephyr_include_directories(src/framework_config)
 
 zephyr_sources(src/lcz_ble_gw_dm_task.c)
+zephyr_sources_ifdef(CONFIG_LCZ_BLE_GW_DM_MEMFAULT src/memfault_task.c)
 
 endif()

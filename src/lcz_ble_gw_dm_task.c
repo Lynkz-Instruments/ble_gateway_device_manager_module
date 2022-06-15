@@ -13,7 +13,6 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /* Includes                                                                                       */
 /**************************************************************************************************/
 #include <zephyr.h>
-
 #include "fwk_includes.h"
 #include "lcz_network_monitor.h"
 #include "lcz_lwm2m_client.h"
@@ -21,6 +20,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #if defined(CONFIG_ATTR)
 #include "attr.h"
 #endif
+#include "memfault_task.h"
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -45,6 +45,7 @@ typedef struct gw_dm_task_obj {
 	uint32_t dm_connection_timeout_seconds;
 	bool lwm2m_connection_err;
 	bool lwm2m_connected;
+	bool send_mflt_data;
 } gw_dm_task_obj_t;
 
 /**************************************************************************************************/
@@ -120,16 +121,20 @@ static void gw_dm_fsm(void)
 
 	switch (gwto.state) {
 	case GW_DM_STATE_WAIT_FOR_NETWORK:
-		gwto.network_ready = lcz_nm_network_ready();
 		if (gwto.network_ready) {
-			FRAMEWORK_MSG_CREATE_AND_BROADCAST(FWK_ID_BLE_GW_DM, FMC_NETWORK_CONNECTED);
+			gwto.send_mflt_data = true;
 			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
 		} else {
 			gwto.timer = gwto.dm_connection_delay_seconds;
 		}
 		break;
 	case GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION:
+		if (gwto.send_mflt_data) {
+			gwto.send_mflt_data = false;
+			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA();
+		}
 		if (timer_expired()) {
+			gwto.send_mflt_data = true;
 			if (gwto.network_ready) {
 				set_state(GW_DM_STATE_CONNECT_TO_DM);
 			} else {
@@ -213,6 +218,10 @@ static void nm_event_callback(enum lcz_nm_event event)
 	case LCZ_NM_EVENT_IFACE_DOWN:
 		gwto.network_ready = false;
 		FRAMEWORK_MSG_CREATE_AND_BROADCAST(FWK_ID_BLE_GW_DM, FMC_NETWORK_DISCONNECTED);
+		break;
+	case LCZ_NM_EVENT_IFACE_DNS_ADDED:
+		gwto.network_ready = true;
+		FRAMEWORK_MSG_CREATE_AND_BROADCAST(FWK_ID_BLE_GW_DM, FMC_NETWORK_CONNECTED);
 		break;
 	default:
 		break;
