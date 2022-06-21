@@ -1,0 +1,20 @@
+---
+info:
+  title: ble_gw_dm_attributes
+attributes:
+  - name: bluetooth_address
+    required: true
+    schema:
+      minLength: 12
+      maxLength: 12
+      type: string
+    x-ctype: string
+    x-broadcast: false
+    x-default: "0"
+    x-example: "010203040506"
+    x-lockable: false
+    x-prepare: false
+    x-readable: true
+    x-savable: false
+    x-writable: false
+    summary: Bluetooth address

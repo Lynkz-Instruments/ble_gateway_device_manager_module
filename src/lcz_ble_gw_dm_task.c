@@ -21,6 +21,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include "attr.h"
 #endif
 #include "memfault_task.h"
+#include "ble_gw_dm_ble.h"
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -153,8 +154,8 @@ static void gw_dm_fsm(void)
 #else
 			ep_name = CONFIG_LCZ_LWM2M_CLIENT_ENDPOINT_NAME;
 #endif
-			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, -1, -1, ep_name,
-						       LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
+			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, -1, -1,
+						       ep_name, LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
 			if (ret < 0) {
 				set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 			} else {
@@ -278,6 +279,10 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 
 	lwm2m_event_agent.connected_callback = lwm2m_client_connected_event;
 	(void)lcz_lwm2m_client_register_event_callback(&lwm2m_event_agent);
+
+#if defined(CONFIG_BT)
+	ble_gw_dm_device_ble_addr_init();
+#endif
 
 	Framework_RegisterTask(&gwto.msgTask);
 	Framework_StartTimer(&gwto.msgTask);
