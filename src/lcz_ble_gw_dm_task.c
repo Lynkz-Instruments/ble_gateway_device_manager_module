@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /* Includes                                                                                       */
 /**************************************************************************************************/
 #include <zephyr.h>
+#include <net/net_config.h>
 #include "fwk_includes.h"
 #include "lcz_network_monitor.h"
 #include "lcz_lwm2m_client.h"
@@ -132,6 +133,7 @@ static void gw_dm_fsm(void)
 	case GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION:
 		if (gwto.send_mflt_data) {
 			gwto.send_mflt_data = false;
+			(void)net_config_init_app(NULL, "SNTP");
 			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA();
 		}
 		if (timer_expired()) {
