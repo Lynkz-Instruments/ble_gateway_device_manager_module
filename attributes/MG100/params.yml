@@ -1,0 +1,22 @@
+---
+info:
+  title: mg100_attributes
+attributes:
+  - name: lte_rat
+    required: false
+    schema:
+      maximum: 1
+      minimum: 0
+      type: integer
+      enum:
+        CAT_M1: 0
+        CAT_NB1: 1
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-default: 0
+    x-lockable: false
+    x-prepare: false
+    x-readable: true
+    x-savable: false
+    x-writable: false
+    summary: "Radio Access Technology"

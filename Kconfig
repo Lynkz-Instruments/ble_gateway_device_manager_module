@@ -50,6 +50,7 @@ endif # LCZ_BLE_GW_DM_SETTINGS
 menuconfig LCZ_BLE_GW_DM_MEMFAULT
 	bool "Memfault data reporting"
 	depends on LCZ_MEMFAULT
+	depends on FILE_SYSTEM_UTILITIES
 
 if LCZ_BLE_GW_DM_MEMFAULT
 
@@ -68,6 +69,33 @@ config LCZ_BLE_GW_DM_MEMFAULT_REPORT_PERIOD_SECONDS
 	help
 	  How often to periodically push memfault data (in seconds)
 
+config LCZ_BLE_GW_DM_MEMFAULT_CHUNK_BUF_SIZE
+	int "Chunk buffer size"
+	default 2048
+	help
+	  Size of the buffer used to post/save memfault data
+
+config LCZ_BLE_GW_DM_MEMFAULT_FILE_NAME
+	string "Memfault data file name"
+	default "mflt.bin"
+	help
+	  File name where Memfault data will be saved
+
+config LCZ_BLE_GW_DM_MEMFAULT_FILE_MAX_SIZE_BYTES
+	int "Memfault data file max size"
+	default 512000
+	help
+	  If the file grows past this size it will be deleted and re-created
+
 endif # LCZ_BLE_GW_DM_MEMFAULT
+
+if MODEM_HL7800
+
+config LCZ_BLE_GW_DM_HL7800_INIT_PRIORITY
+    int "Application init priority for hl7800"
+    range 0 99
+    default APPLICATION_INIT_PRIORITY
+
+endif # MODEM_HL7800
 
 endif # LCZ_BLE_GW_DM
