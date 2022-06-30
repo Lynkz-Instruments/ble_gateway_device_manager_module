@@ -18,3 +18,50 @@ attributes:
     x-savable: false
     x-writable: false
     summary: Bluetooth address
+  - name: dm_cnx_delay
+    required: true
+    schema:
+      type: integer
+      minimum: 0
+      maximum: 600
+    x-ctype: uint16_t
+    x-broadcast: true
+    x-default: 0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    x-validator: cp16
+    summary: "Delay (in seconds) before connecting to DM server"
+    description: "Write: Control point - Write 0 to generate new randomized delay with value between (mdm_cnx_delay_minin, dm_cnx_delay_max). Read: time in seconds to delay before connecting."
+  - name: dm_cnx_delay_min
+    required: true
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 599
+    x-ctype: uint16_t
+    x-broadcast: true
+    x-default: 1
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "Min delay (in seconds) before connecting to DM server."
+  - name: dm_cnx_delay_max
+    required: true
+    schema:
+      type: integer
+      minimum: 2
+      maximum: 600
+    x-ctype: uint16_t
+    x-broadcast: true
+    x-default: 300
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "Max delay (in seconds) before connecting to DM server."

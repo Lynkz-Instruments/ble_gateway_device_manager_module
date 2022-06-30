@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /**************************************************************************************************/
 #include <zephyr.h>
 #include <net/net_config.h>
+#include <random/rand32.h>
 #include "fwk_includes.h"
 #include "lcz_network_monitor.h"
 #include "lcz_lwm2m_client.h"
@@ -28,6 +29,8 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /* Local Constant, Macro and Type Definitions                                                     */
 /**************************************************************************************************/
 #define GW_DM_TASK_QUEUE_DEPTH 8
+#define DM_CONNECTION_DELAY_FALLBACK 5
+#define RAND_RANGE(min, max) ((sys_rand32_get() % (max - min + 1)) + min)
 
 enum gw_dm_state {
 	GW_DM_STATE_WAIT_FOR_NETWORK = 0,
@@ -70,10 +73,45 @@ static struct lcz_nm_event_agent event_agent;
 static gw_dm_task_obj_t gwto;
 K_MSGQ_DEFINE(gw_dm_task_queue, FWK_QUEUE_ENTRY_SIZE, GW_DM_TASK_QUEUE_DEPTH, FWK_QUEUE_ALIGNMENT);
 static struct lcz_lwm2m_client_event_callback_agent lwm2m_event_agent;
+static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg);
+static void random_connect_handler(void);
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
 /**************************************************************************************************/
+static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg)
+{
+	int i;
+	attr_changed_msg_t *pb = (attr_changed_msg_t *)pMsg;
+
+	for (i = 0; i < pb->count; i++) {
+		switch (pb->list[i]) {
+		case ATTR_ID_dm_cnx_delay:
+			random_connect_handler();
+			break;
+
+		default:
+			/* Don't care about this attribute. This is a broadcast. */
+			break;
+		}
+	}
+
+	return DISPATCH_OK;
+}
+
+static void random_connect_handler(void)
+{
+	uint32_t delay = attr_get_uint32(ATTR_ID_dm_cnx_delay, 1);
+	uint32_t min = attr_get_uint32(ATTR_ID_dm_cnx_delay_min, 1);
+	uint32_t max = attr_get_uint32(ATTR_ID_dm_cnx_delay_max, 2);
+
+	LOG_DBG("min: %u max: %u delay: %u", min, max, delay);
+
+	if (delay == 0) {
+		delay = RAND_RANGE(min, max);
+		(void)attr_set_uint32(ATTR_ID_dm_cnx_delay, delay);
+	}
+}
 
 static char *state_to_string(enum gw_dm_state state)
 {
@@ -125,9 +163,15 @@ static void gw_dm_fsm(void)
 	case GW_DM_STATE_WAIT_FOR_NETWORK:
 		if (gwto.network_ready) {
 			gwto.send_mflt_data = true;
-			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
-		} else {
 			gwto.timer = gwto.dm_connection_delay_seconds;
+			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
+			LOG_INF("Waiting %d seconds to connect to server",
+				gwto.dm_connection_delay_seconds);
+		} else if (timer_expired()) {
+			gwto.network_ready = lcz_nm_network_ready();
+			LOG_DBG("Re-checking network ready: %s",
+				gwto.network_ready ? "true" : "false");
+			gwto.timer = CONFIG_LCZ_BLE_GW_DM_WAIT_FOR_NETWORK_TIMEOUT;
 		}
 		break;
 	case GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION:
@@ -209,6 +253,7 @@ static FwkMsgHandler_t *gw_dm_task_msg_dispatcher(FwkMsgCode_t MsgCode)
 	switch (MsgCode) {
 	case FMC_INVALID:                    return Framework_UnknownMsgHandler;
 	case FMC_PERIODIC:                   return gateway_fsm_tick_handler;
+	case FMC_ATTR_CHANGED:               return attr_broadcast_msg_handler;
 	default:                             return NULL;
 	}
 	/* clang-format on */
@@ -265,18 +310,16 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	gwto.msgTask.rxer.pQueue = &gw_dm_task_queue;
 
 	set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
-#if defined(CONFIG_LCZ_BLE_GW_DM_CONNECTION_DELAY)
+	gwto.timer = CONFIG_LCZ_BLE_GW_DM_WAIT_FOR_NETWORK_TIMEOUT;
+	gwto.dm_connection_timeout_seconds = CONFIG_LCZ_BLE_GW_DM_CONNECTION_TIMEOUT;
+
+#if defined(CONFIG_LCZ_BLE_GW_DM_INIT_KCONFIG)
 	gwto.dm_connection_delay_seconds = CONFIG_LCZ_BLE_GW_DM_CONNECTION_DELAY;
 #else
-	/* this is a placeholder for a future runtime setting */
-	gwto.dm_connection_delay_seconds = 0;
-#endif
-
-#if defined(CONFIG_LCZ_BLE_GW_DM_CONNECTION_TIMEOUT)
-	gwto.dm_connection_timeout_seconds = CONFIG_LCZ_BLE_GW_DM_CONNECTION_TIMEOUT;
-#else
-	/* this is a placeholder for a future runtime setting */
-	gwto.dm_connection_timeout_seconds = 90;
+	/* generate random connect time if value is 0 */
+	random_connect_handler();
+	gwto.dm_connection_delay_seconds =
+		attr_get_uint32(ATTR_ID_dm_cnx_delay, DM_CONNECTION_DELAY_FALLBACK);
 #endif
 
 	lwm2m_event_agent.connected_callback = lwm2m_client_connected_event;
