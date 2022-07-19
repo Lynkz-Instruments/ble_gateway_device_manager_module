@@ -325,10 +325,6 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	lwm2m_event_agent.connected_callback = lwm2m_client_connected_event;
 	(void)lcz_lwm2m_client_register_event_callback(&lwm2m_event_agent);
 
-#if defined(CONFIG_BT)
-	ble_gw_dm_device_ble_addr_init();
-#endif
-
 	Framework_RegisterTask(&gwto.msgTask);
 	Framework_StartTimer(&gwto.msgTask);
 

@@ -13,14 +13,25 @@ LOG_MODULE_REGISTER(ble_gw_dm_ble, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
+#include <init.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include "attr.h"
 #include "ble_gw_dm_ble.h"
 
 /**************************************************************************************************/
+/* Local Function Prototypes                                                                      */
+/**************************************************************************************************/
+static int ble_gw_dm_device_ble_addr_init(const struct device *device);
+
+/**************************************************************************************************/
 /* Global Function Definitions                                                                    */
 /**************************************************************************************************/
-int ble_gw_dm_device_ble_addr_init(void)
+SYS_INIT(ble_gw_dm_device_ble_addr_init, APPLICATION, CONFIG_LCZ_BLE_GW_DM_BLE_ADDR_INIT_PRIORITY);
+
+/**************************************************************************************************/
+/* SYS INIT                                                                                       */
+/**************************************************************************************************/
+static int ble_gw_dm_device_ble_addr_init(const struct device *device)
 {
 	int ret = 0;
 	size_t count = 1;
@@ -28,6 +39,8 @@ int ble_gw_dm_device_ble_addr_init(void)
 	char addr_str[BT_ADDR_LE_STR_LEN] = { 0 };
 	char bd_addr[BT_ADDR_LE_STR_LEN];
 	size_t size;
+
+	ARG_UNUSED(device);
 
 #if defined(CONFIG_ATTR)
 	size = attr_get_size(ATTR_ID_bluetooth_address);

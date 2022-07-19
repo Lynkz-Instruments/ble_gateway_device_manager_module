@@ -127,6 +127,5 @@ int lcz_ble_gw_dm_memfault_post_data(void)
 	return 0;
 }
 
-/* Delay this thread start so it starts after main DM thread to ensure BLE address is ready */
 K_THREAD_DEFINE(memfault, CONFIG_LCZ_BLE_GW_DM_MEMFAULT_THREAD_STACK_SIZE, memfault_thread, NULL,
-		NULL, NULL, K_PRIO_PREEMPT(CONFIG_LCZ_BLE_GW_DM_MEMFAULT_THREAD_PRIORITY), 0, 1000);
+		NULL, NULL, K_PRIO_PREEMPT(CONFIG_LCZ_BLE_GW_DM_MEMFAULT_THREAD_PRIORITY), 0, 0);
