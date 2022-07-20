@@ -15,13 +15,15 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include <zephyr.h>
 #include <net/net_config.h>
 #include <random/rand32.h>
-#include "fwk_includes.h"
-#include "lcz_network_monitor.h"
-#include "lcz_lwm2m_client.h"
-#include "lcz_ble_gw_dm_task.h"
 #if defined(CONFIG_ATTR)
 #include "attr.h"
 #endif
+#include "fwk_includes.h"
+#include "lcz_ble_gw_dm_task.h"
+#include "lcz_lwm2m_client.h"
+#include "lcz_memfault.h"
+#include "lcz_network_monitor.h"
+#include "lcz_software_reset.h"
 #include "memfault_task.h"
 #include "ble_gw_dm_ble.h"
 
@@ -31,6 +33,11 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #define GW_DM_TASK_QUEUE_DEPTH 8
 #define DM_CONNECTION_DELAY_FALLBACK 5
 #define RAND_RANGE(min, max) ((sys_rand32_get() % (max - min + 1)) + min)
+
+#define CONNECTION_WATCHDOG_REBOOT_DELAY_MS 1000
+#define CONNECTION_WATCHDOG_TIMEOUT_MULTIPLIER 2
+#define CONNECTION_WATCHDOG_MAX_FALLBACK 300
+#define CONNECTION_WATCHDOG_REBOOT_TIMER_TIMEOUT_MINUTES 60
 
 enum gw_dm_state {
 	GW_DM_STATE_WAIT_FOR_NETWORK = 0,
@@ -65,6 +72,8 @@ static void set_state(enum gw_dm_state next_state);
 static char *state_to_string(enum gw_dm_state state);
 static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_client_index,
 					 bool connected, enum lwm2m_rd_client_event client_event);
+static void connection_watchdog_timer_callback(struct k_timer *timer_id);
+static void pet_connection_watchdog(bool in_connection);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -75,6 +84,8 @@ K_MSGQ_DEFINE(gw_dm_task_queue, FWK_QUEUE_ENTRY_SIZE, GW_DM_TASK_QUEUE_DEPTH, FW
 static struct lcz_lwm2m_client_event_callback_agent lwm2m_event_agent;
 static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg);
 static void random_connect_handler(void);
+static struct k_timer connection_watchdog_timer;
+static struct k_timer connection_watchdog_reboot_timer;
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
@@ -228,7 +239,7 @@ static void gw_dm_fsm(void)
 		}
 		break;
 	case GW_DM_STATE_DISCONNECT_DM:
-		if (!gwto.network_ready) {
+		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
 		} else {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, true);
@@ -281,22 +292,74 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 {
 	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		gwto.lwm2m_connected = connected;
+		gwto.lwm2m_connection_err = false;
 		switch (client_event) {
+		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE:
+			pet_connection_watchdog(true);
+			break;
+		case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE:
+			pet_connection_watchdog(true);
+			break;
+		case LWM2M_RD_CLIENT_EVENT_DISCONNECT:
+			pet_connection_watchdog(false);
+			break;
 		case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
 		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
 		case LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR:
 			gwto.lwm2m_connection_err = true;
 			break;
 		default:
-			gwto.lwm2m_connection_err = false;
 			break;
 		}
 	}
 }
 
+static void connection_watchdog_timer_callback(struct k_timer *timer_id)
+{
+	if (timer_id == &connection_watchdog_timer) {
+		LOG_WRN("Connection watchdog expired!");
+		MFLT_METRICS_ADD(lwm2m_dm_watchdog, 1);
+		lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
+	} else if (timer_id == &connection_watchdog_reboot_timer) {
+		LOG_WRN("Connection reboot watchdog expired!");
+		lcz_software_reset_after_assert(CONNECTION_WATCHDOG_REBOOT_DELAY_MS);
+	}
+}
+
+static void pet_connection_watchdog(bool in_connection)
+{
+	int ret;
+	uint32_t timeout;
+
+	if (in_connection) {
+		ret = lwm2m_engine_get_u32("1/0/1", &timeout);
+		if (ret < 0) {
+			LOG_ERR("Could not read lifetime");
+		}
+		/* Wait for multiple registration updates */
+		timeout *= CONNECTION_WATCHDOG_TIMEOUT_MULTIPLIER;
+
+		/* pet the reboot watchdog to prevent a system reboot */
+		k_timer_start(&connection_watchdog_reboot_timer,
+			      K_MINUTES(CONNECTION_WATCHDOG_REBOOT_TIMER_TIMEOUT_MINUTES),
+			      K_NO_WAIT);
+	} else {
+		timeout = attr_get_uint32(ATTR_ID_dm_cnx_delay_max, CONNECTION_WATCHDOG_MAX_FALLBACK);
+		timeout *= CONNECTION_WATCHDOG_TIMEOUT_MULTIPLIER;
+	}
+	LOG_DBG("Connection watchdog set to %d seconds", timeout);
+	k_timer_start(&connection_watchdog_timer, K_SECONDS(timeout), K_NO_WAIT);
+}
+
 static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 {
 	LOG_INF("BLE Gateway Device Manager Started");
+
+	k_timer_init(&connection_watchdog_timer, connection_watchdog_timer_callback, NULL);
+	k_timer_init(&connection_watchdog_reboot_timer, connection_watchdog_timer_callback, NULL);
+	/* Start the reboot watchdog to reboot the system if we never connect to the server. */
+	k_timer_start(&connection_watchdog_reboot_timer,
+		      K_MINUTES(CONNECTION_WATCHDOG_REBOOT_TIMER_TIMEOUT_MINUTES), K_NO_WAIT);
 
 	gwto.network_ready = false;
 	event_agent.callback = nm_event_callback;
