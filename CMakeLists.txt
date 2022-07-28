@@ -16,5 +16,6 @@ zephyr_sources(src/lcz_ble_gw_dm_task.c)
 zephyr_sources_ifdef(CONFIG_LCZ_BLE_GW_DM_MEMFAULT src/memfault_task.c)
 zephyr_sources_ifdef(CONFIG_BT src/ble_gw_dm_ble.c)
 zephyr_sources_ifdef(CONFIG_MODEM_HL7800 src/hl7800.c)
+zephyr_sources_ifdef(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M src/lwm2m_telemetry.c)
 
 endif()

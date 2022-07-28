@@ -24,6 +24,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include "lcz_memfault.h"
 #include "lcz_network_monitor.h"
 #include "lcz_software_reset.h"
+#include "lwm2m_telemetry.h"
 #include "memfault_task.h"
 #include "ble_gw_dm_ble.h"
 
@@ -44,6 +45,11 @@ enum gw_dm_state {
 	GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION,
 	GW_DM_STATE_CONNECT_TO_DM,
 	GW_DM_STATE_WAIT_FOR_CONNECTION,
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	GW_DM_STATE_CONNECT_TELEM,
+	GW_DM_STATE_WAIT_FOR_TELEM_CONNECTION,
+	GW_DM_STATE_DISCONNECT_TELEM,
+#endif
 	GW_DM_STATE_IDLE,
 	GW_DM_STATE_DISCONNECT_DM,
 };
@@ -57,6 +63,10 @@ typedef struct gw_dm_task_obj {
 	uint32_t dm_connection_timeout_seconds;
 	bool lwm2m_connection_err;
 	bool lwm2m_connected;
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	bool telem_enabled;
+	bool lwm2m_telem_connected;
+#endif
 	bool send_mflt_data;
 } gw_dm_task_obj_t;
 
@@ -139,6 +149,14 @@ static char *state_to_string(enum gw_dm_state state)
 		return "Idle";
 	case GW_DM_STATE_DISCONNECT_DM:
 		return "Disconnect DM";
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	case GW_DM_STATE_CONNECT_TELEM:
+		return "Connect to telemetry server";
+	case GW_DM_STATE_WAIT_FOR_TELEM_CONNECTION:
+		return "Wait for telemetry connection";
+	case GW_DM_STATE_DISCONNECT_TELEM:
+		return "Disconnect telemetry";
+#endif
 	default:
 		return "Unknown";
 	}
@@ -211,8 +229,11 @@ static void gw_dm_fsm(void)
 #else
 			ep_name = CONFIG_LCZ_LWM2M_CLIENT_ENDPOINT_NAME;
 #endif
-			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, -1, -1,
-						       ep_name, LCZ_LWM2M_CLIENT_TRANSPORT_UDP);
+			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX,
+						       CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX,
+						       CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, ep_name,
+						       LCZ_LWM2M_CLIENT_TRANSPORT_UDP,
+						       CONFIG_LCZ_LWM2M_TLS_TAG);
 			if (ret < 0) {
 				set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 			} else {
@@ -227,16 +248,99 @@ static void gw_dm_fsm(void)
 			set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 		} else {
 			if (gwto.lwm2m_connected) {
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+				gwto.telem_enabled =
+					*(bool *)attr_get_quasi_static(ATTR_ID_lwm2m_telem_enable);
+				if (gwto.telem_enabled) {
+					set_state(GW_DM_STATE_CONNECT_TELEM);
+				} else {
+					set_state(GW_DM_STATE_IDLE);
+				}
+#else
+				set_state(GW_DM_STATE_CONNECT_TELEM);
+#endif
+#else
 				set_state(GW_DM_STATE_IDLE);
+#endif
 			} else if (timer_expired()) {
 				set_state(GW_DM_STATE_DISCONNECT_DM);
 			}
 		}
 		break;
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	case GW_DM_STATE_CONNECT_TELEM:
+		if (!gwto.network_ready) {
+			set_state(GW_DM_STATE_DISCONNECT_DM);
+		} else {
+			gwto.lwm2m_connection_err = false;
+			gwto.timer = gwto.dm_connection_timeout_seconds;
+#if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
+			ep_name = (char *)attr_get_quasi_static(ATTR_ID_lwm2m_telem_endpoint);
+#else
+			ep_name = LCZ_BLE_GW_DM_TELEM_LWM2M_ENDPOINT_NAME;
+#endif
+			ret = lwm2m_telemetry_init();
+			if (ret < 0) {
+				break;
+			}
+
+			ret = lcz_lwm2m_client_connect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX,
+						       CONFIG_LCZ_BLE_GW_DM_TELEMETRY_SERVER_INST,
+						       CONFIG_LCZ_BLE_GW_DM_TELEMETRY_SERVER_INST,
+						       ep_name, LCZ_LWM2M_CLIENT_TRANSPORT_UDP,
+						       CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M_TLS_TAG);
+			if (ret < 0) {
+				if (!lcz_lwm2m_client_is_connected(
+					    CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
+					set_state(GW_DM_STATE_DISCONNECT_DM);
+				}
+			} else {
+				set_state(GW_DM_STATE_WAIT_FOR_TELEM_CONNECTION);
+			}
+		}
+		break;
+	case GW_DM_STATE_WAIT_FOR_TELEM_CONNECTION:
+		if (!gwto.network_ready) {
+			set_state(GW_DM_STATE_DISCONNECT_DM);
+		} else if (gwto.lwm2m_connection_err) {
+			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+				set_state(GW_DM_STATE_DISCONNECT_DM);
+			} else {
+				set_state(GW_DM_STATE_DISCONNECT_TELEM);
+			}
+		} else {
+			if (gwto.lwm2m_telem_connected) {
+				set_state(GW_DM_STATE_IDLE);
+			} else if (timer_expired()) {
+				set_state(GW_DM_STATE_DISCONNECT_TELEM);
+			}
+		}
+		break;
+	case GW_DM_STATE_DISCONNECT_TELEM:
+		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
+			set_state(GW_DM_STATE_DISCONNECT_DM);
+		} else {
+			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+				lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX,
+							    false);
+			} else {
+				lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX,
+							    true);
+			}
+			set_state(GW_DM_STATE_CONNECT_TELEM);
+		}
+		break;
+#endif /* CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M */
 	case GW_DM_STATE_IDLE:
 		if (!gwto.network_ready || !gwto.lwm2m_connected) {
 			set_state(GW_DM_STATE_DISCONNECT_DM);
 		}
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+		else if (gwto.telem_enabled && !gwto.lwm2m_telem_connected) {
+			set_state(GW_DM_STATE_DISCONNECT_TELEM);
+		}
+#endif
 		break;
 	case GW_DM_STATE_DISCONNECT_DM:
 		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
@@ -244,6 +348,13 @@ static void gw_dm_fsm(void)
 		} else {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, true);
 		}
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, false);
+		} else {
+			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, true);
+		}
+#endif
 		set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 		break;
 	default:
@@ -290,9 +401,18 @@ static void nm_event_callback(enum lcz_nm_event event)
 static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_client_index,
 					 bool connected, enum lwm2m_rd_client_event client_event)
 {
+	gwto.lwm2m_connection_err = false;
+
 	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		gwto.lwm2m_connected = connected;
-		gwto.lwm2m_connection_err = false;
+	}
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	else {
+		gwto.lwm2m_telem_connected = connected;
+	}
+#endif
+
+	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		switch (client_event) {
 		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE:
 			pet_connection_watchdog(true);
@@ -312,6 +432,19 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 			break;
 		}
 	}
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	else {
+		switch (client_event) {
+		case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
+		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
+		case LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR:
+			gwto.lwm2m_connection_err = true;
+			break;
+		default:
+			break;
+		}
+	}
+#endif
 }
 
 static void connection_watchdog_timer_callback(struct k_timer *timer_id)
@@ -344,7 +477,8 @@ static void pet_connection_watchdog(bool in_connection)
 			      K_MINUTES(CONNECTION_WATCHDOG_REBOOT_TIMER_TIMEOUT_MINUTES),
 			      K_NO_WAIT);
 	} else {
-		timeout = attr_get_uint32(ATTR_ID_dm_cnx_delay_max, CONNECTION_WATCHDOG_MAX_FALLBACK);
+		timeout =
+			attr_get_uint32(ATTR_ID_dm_cnx_delay_max, CONNECTION_WATCHDOG_MAX_FALLBACK);
 		timeout *= CONNECTION_WATCHDOG_TIMEOUT_MULTIPLIER;
 	}
 	LOG_DBG("Connection watchdog set to %d seconds", timeout);

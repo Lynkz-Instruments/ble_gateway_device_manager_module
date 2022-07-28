@@ -1,0 +1,124 @@
+---
+info:
+  title: lwm2m_client_attributes
+attributes:
+  - name: lwm2m_telem_server_url
+    required: true
+    schema:
+      maxLength: 255
+      minLength: 11 # coap://1.io
+      type: string
+      pattern: coaps?://(\.?|\w|[-|_])+([\.|/]((\w|[0-9]|[-|_])*))+(\:[0-9]{1,5})?
+    x-ctype: string
+    x-broadcast: true
+    x-default: coap://leshan.eclipseprojects.io:5683
+    x-example: coaps://leshan.eclipseprojects.io:5784
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Server URL to connect to
+  - name: lwm2m_telem_endpoint
+    required: true
+    schema:
+      maxLength: 64
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: endpoint
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: Endpoint name to identify the device
+  - name: lwm2m_telem_security
+    required: true
+    schema:
+      maximum: 4
+      minimum: 0
+      type: integer
+      enum:
+        PSK: 0
+        RPK: 1
+        CERT: 2
+        NO_SEC: 3
+        CERT_EST: 4
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-default: 3
+    x-example: 0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "LwM2M Security mode"
+  - name: lwm2m_telem_psk_id
+    required: true
+    schema:
+      maxLength: 64
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: my_device
+    x-example: my_device
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: PSK ID
+  - name: lwm2m_telem_psk
+    required: true
+    schema:
+      maxItems: 16
+      minItems: 16
+      type: array
+    x-ctype: uint8_t
+    x-broadcast: true
+    x-array-size: 16
+    x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
+    x-lockable: true
+    x-prepare: false
+    x-readable: false
+    x-savable: true
+    x-writable: true
+    summary: Pre-shared key
+  - name: lwm2m_telem_short_id
+    required: true
+    schema:
+      maximum: 65534
+      minimum: 1
+      type: integer
+    x-ctype: uint16_t
+    x-broadcast: true
+    x-default: 2
+    x-example: 101
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary:
+      "short_server_id This identifier uniquely identifies each LwM2M Server configured for
+      the LwM2M Client. This Resource MUST be set when the Bootstrap-Server Resource has a value of
+      'false'."
+  - name: lwm2m_telem_enable
+    required: true
+    schema:
+      maximum: 1
+      minimum: 0
+      type: integer
+    x-ctype: bool
+    x-broadcast: true
+    x-default: 0
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: 0 - disable telemetry connection, 1 - enable

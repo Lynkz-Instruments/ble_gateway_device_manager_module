@@ -43,6 +43,32 @@ config LCZ_BLE_GW_DM_WAIT_FOR_NETWORK_TIMEOUT
 	  Time in seconds to wait for the network to be ready before forcing
 	  a re-check.
 
+config LCZ_BLE_GW_DM_TELEM_LWM2M
+	bool "LwM2M Telemetry"
+	help
+	  Enable a second LwM2M connection for telemetry data.
+
+if LCZ_BLE_GW_DM_TELEM_LWM2M
+
+config LCZ_BLE_GW_DM_TELEMETRY_INDEX
+    int "LwM2M telemetry connection index"
+	default 1
+
+config LCZ_BLE_GW_DM_TELEMETRY_SERVER_INST
+    int "LwM2M telemetry server inst"
+	default 2
+	help
+	  Instance value for object 0 that is associated with the telemetry
+	  connection.
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_TLS_TAG
+	int "TLS tag for secure connection"
+	depends on LCZ_LWM2M_DTLS_SUPPORT
+	default 1000
+	range 0 65535
+
+endif # LCZ_BLE_GW_DM_TELEM_LWM2M
+
 choice
 	prompt "Init mode"
 	default LCZ_BLE_GW_DM_INIT_KCONFIG
@@ -75,6 +101,50 @@ config LCZ_BLE_GW_DM_CONNECTION_DELAY
 	help
 	  Time in seconds to delay before connecting to device management
 	  services after the network connection is ready.
+
+if LCZ_BLE_GW_DM_TELEM_LWM2M
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_SERVER_URL
+	string "Server URL"
+	default "coap://leshan.eclipseprojects.io:5683"
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_ENDPOINT_NAME
+	string "Endpoint name"
+	default "endpoint"
+	help
+	  Endpoint name used by the application for starting a connection.
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_SECURITY_MODE
+	int "Security mode"
+	range 0 4
+	default 3
+	help
+	  0 - PSK
+	  1 - RPK
+	  2 - Certificate
+	  3 - No Security
+	  4 - Certificate with EST
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_PSK_ID
+	string "PSK ID"
+	default "my_psk"
+	help
+	  Pre-shared key identity
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_PSK
+	string "PSK"
+	default "000102030405060708090a0b0c0d0e0f"
+	help
+	  PSK as a HEX string. This string will be converted to binary and
+	  used as the PSK.
+	  Length of this string needs to be LCZ_LWM2M_SECURITY_KEY_SIZE.
+
+config LCZ_BLE_GW_DM_TELEM_LWM2M_SHORT_SERVER_ID
+	int "Short server ID"
+	range 1 65534
+	default 2
+
+endif # LCZ_BLE_GW_DM_TELEM_LWM2M
 
 endif # LCZ_BLE_GW_DM_INIT_KCONFIG
 
