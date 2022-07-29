@@ -65,3 +65,18 @@ attributes:
     x-savable: true
     x-writable: true
     summary: "Max delay (in seconds) before connecting to DM server."
+  - name: factory_load_path
+    required: true
+    schema:
+      maxLength: 32
+      minLength: 1
+      type: string
+    x-ctype: string
+    x-broadcast: false
+    x-default: /lfs1/enc/factory_load.txt
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "Path for factory settings that can be restored with attribute load"
