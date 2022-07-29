@@ -13,8 +13,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /* Includes                                                                                       */
 /**************************************************************************************************/
 #include <zephyr.h>
-#include <net/net_config.h>
 #include <random/rand32.h>
+#include <posix/time.h>
+#include <date_time.h>
 #if defined(CONFIG_ATTR)
 #include "attr.h"
 #endif
@@ -42,6 +43,8 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 enum gw_dm_state {
 	GW_DM_STATE_WAIT_FOR_NETWORK = 0,
+	GW_DM_STATE_GET_NETWORK_TIME,
+	GW_DM_STATE_POST_MEMFAULT_DATA,
 	GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION,
 	GW_DM_STATE_CONNECT_TO_DM,
 	GW_DM_STATE_WAIT_FOR_CONNECTION,
@@ -67,7 +70,7 @@ typedef struct gw_dm_task_obj {
 	bool telem_enabled;
 	bool lwm2m_telem_connected;
 #endif
-	bool send_mflt_data;
+	uint32_t time;
 } gw_dm_task_obj_t;
 
 /**************************************************************************************************/
@@ -84,6 +87,9 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 					 bool connected, enum lwm2m_rd_client_event client_event);
 static void connection_watchdog_timer_callback(struct k_timer *timer_id);
 static void pet_connection_watchdog(bool in_connection);
+static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+				  size_t *data_len);
+static void date_time_event_handler(const struct date_time_evt *evt);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -139,6 +145,10 @@ static char *state_to_string(enum gw_dm_state state)
 	switch (state) {
 	case GW_DM_STATE_WAIT_FOR_NETWORK:
 		return "Wait for network";
+	case GW_DM_STATE_GET_NETWORK_TIME:
+		return "Get network time";
+	case GW_DM_STATE_POST_MEMFAULT_DATA:
+		return "Post Memfault data";
 	case GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION:
 		return "Delay before DM connection";
 	case GW_DM_STATE_CONNECT_TO_DM:
@@ -183,6 +193,20 @@ static bool timer_expired(void)
 	}
 }
 
+static void date_time_event_handler(const struct date_time_evt *evt)
+{
+	switch (evt->type) {
+	case DATE_TIME_OBTAINED_NTP:
+		LOG_DBG("Got time from NTP");
+		break;
+	case DATE_TIME_NOT_OBTAINED:
+		LOG_DBG("No time from NTP");
+		break;
+	default:
+		break;
+	}
+}
+
 static void gw_dm_fsm(void)
 {
 	int ret;
@@ -191,11 +215,7 @@ static void gw_dm_fsm(void)
 	switch (gwto.state) {
 	case GW_DM_STATE_WAIT_FOR_NETWORK:
 		if (gwto.network_ready) {
-			gwto.send_mflt_data = true;
-			gwto.timer = gwto.dm_connection_delay_seconds;
-			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
-			LOG_INF("Waiting %d seconds to connect to server",
-				gwto.dm_connection_delay_seconds);
+			set_state(GW_DM_STATE_GET_NETWORK_TIME);
 		} else if (timer_expired()) {
 			gwto.network_ready = lcz_nm_network_ready();
 			LOG_DBG("Re-checking network ready: %s",
@@ -203,14 +223,27 @@ static void gw_dm_fsm(void)
 			gwto.timer = CONFIG_LCZ_BLE_GW_DM_WAIT_FOR_NETWORK_TIMEOUT;
 		}
 		break;
-	case GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION:
-		if (gwto.send_mflt_data) {
-			gwto.send_mflt_data = false;
-			(void)net_config_init_app(NULL, "SNTP");
-			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA();
+	case GW_DM_STATE_GET_NETWORK_TIME:
+		if (!gwto.network_ready) {
+			set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
+		} else {
+			(void)date_time_update_async(date_time_event_handler);
+			set_state(GW_DM_STATE_POST_MEMFAULT_DATA);
 		}
+		break;
+	case GW_DM_STATE_POST_MEMFAULT_DATA:
+		if (!gwto.network_ready) {
+			set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
+		} else {
+			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA();
+			gwto.timer = gwto.dm_connection_delay_seconds;
+			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
+			LOG_INF("Waiting %d seconds to connect to server",
+				gwto.dm_connection_delay_seconds);
+		}
+		break;
+	case GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION:
 		if (timer_expired()) {
-			gwto.send_mflt_data = true;
 			if (gwto.network_ready) {
 				set_state(GW_DM_STATE_CONNECT_TO_DM);
 			} else {
@@ -304,7 +337,7 @@ static void gw_dm_fsm(void)
 		if (!gwto.network_ready) {
 			set_state(GW_DM_STATE_DISCONNECT_DM);
 		} else if (gwto.lwm2m_connection_err) {
-			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
 				set_state(GW_DM_STATE_DISCONNECT_DM);
 			} else {
 				set_state(GW_DM_STATE_DISCONNECT_TELEM);
@@ -485,6 +518,23 @@ static void pet_connection_watchdog(bool in_connection)
 	k_timer_start(&connection_watchdog_timer, K_SECONDS(timeout), K_NO_WAIT);
 }
 
+static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+				  size_t *data_len)
+{
+	struct timespec tp;
+
+	ARG_UNUSED(obj_inst_id);
+	ARG_UNUSED(res_id);
+	ARG_UNUSED(res_inst_id);
+
+	clock_gettime(CLOCK_REALTIME, &tp);
+	gwto.time = tp.tv_sec;
+	*data_len = 4;
+	LOG_DBG("Epoch time: %d", gwto.time);
+
+	return &gwto.time;
+}
+
 static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 {
 	LOG_INF("BLE Gateway Device Manager Started");
@@ -521,6 +571,7 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 
 	lwm2m_event_agent.connected_callback = lwm2m_client_connected_event;
 	(void)lcz_lwm2m_client_register_event_callback(&lwm2m_event_agent);
+	lcz_lwm2m_client_register_get_time_callback(current_time_read_cb);
 
 	Framework_RegisterTask(&gwto.msgTask);
 	Framework_StartTimer(&gwto.msgTask);
