@@ -16,6 +16,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include <random/rand32.h>
 #include <posix/time.h>
 #include <date_time.h>
+#if defined(CONFIG_MODEM_HL7800)
+#include <zephyr/drivers/modem/hl7800.h>
+#endif
 #if defined(CONFIG_ATTR)
 #include "attr.h"
 #endif
@@ -538,6 +541,18 @@ static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_
 static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 {
 	LOG_INF("BLE Gateway Device Manager Started");
+#if defined(CONFIG_ATTR)
+	char *dev_id;
+	dev_id = (char *)attr_get_quasi_static(ATTR_ID_device_id);
+	if (strlen(dev_id) < 1) {
+#if defined(CONFIG_MODEM_HL7800)
+		dev_id = mdm_hl7800_get_imei();
+#else
+		dev_id = (char *)attr_get_quasi_static(ATTR_ID_bluetooth_address);
+#endif
+		attr_set_string(ATTR_ID_device_id, dev_id, strlen(dev_id));
+	}
+#endif
 
 	k_timer_init(&connection_watchdog_timer, connection_watchdog_timer_callback, NULL);
 	k_timer_init(&connection_watchdog_reboot_timer, connection_watchdog_timer_callback, NULL);

@@ -80,3 +80,18 @@ attributes:
     x-savable: true
     x-writable: true
     summary: "Path for factory settings that can be restored with attribute load"
+  - name: device_id
+    required: true
+    schema:
+      maxLength: 64
+      minLength: 0
+      type: string
+    x-ctype: string
+    x-broadcast: true
+    x-default: ""
+    x-lockable: true
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "Unique identifier for the device. When firmware boots, if the value is blank (the default value), the firmware will set a unique value for the device using BLE MAC address, IMEI, or some similar value."
