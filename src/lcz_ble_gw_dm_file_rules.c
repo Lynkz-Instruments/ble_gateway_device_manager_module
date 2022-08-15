@@ -30,10 +30,26 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm_file_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #endif
 
 /**************************************************************************************************/
+/* Local Constant, Macro and Type Definitions                                                     */
+/**************************************************************************************************/
+#ifdef ATTR_ID_factory_load_path
+/* How long after the last write will writes to the factory load path still succeed */
+#define FACTORY_WRITE_DURATION K_SECONDS(1)
+#endif
+
+/**************************************************************************************************/
 /* Local Function Prototypes                                                                      */
 /**************************************************************************************************/
 static int lcz_ble_gw_dm_file_rules_init(const struct device *device);
 static bool gw_dm_file_test(const char *path, bool write);
+static void factory_write_work_handler(struct k_work *work);
+
+/**************************************************************************************************/
+/* Local Data Definitions                                                                         */
+/**************************************************************************************************/
+#ifdef ATTR_ID_factory_load_path
+static K_WORK_DELAYABLE_DEFINE(factory_write_work, factory_write_work_handler);
+#endif
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
@@ -71,7 +87,13 @@ static bool gw_dm_file_test(const char *path, bool write)
 #ifdef ATTR_ID_factory_load_path
 	load_path = (char *)attr_get_quasi_static(ATTR_ID_factory_load_path);
 	if (strcmp(load_path, simple_path) == 0) {
-		if (efs_get_file_size(simple_path) < 0) {
+		if (k_work_delayable_is_pending(&factory_write_work)) {
+			/* Write of the factory file is pending */
+			k_work_reschedule(&factory_write_work, FACTORY_WRITE_DURATION);
+			return true;
+		} else if (efs_get_file_size(simple_path) < 0) {
+			/* New write of factory file is allowed */
+			k_work_reschedule(&factory_write_work, FACTORY_WRITE_DURATION);
 			return true;
 		}
 	}
@@ -79,6 +101,11 @@ static bool gw_dm_file_test(const char *path, bool write)
 
 	/* Reject anything else by default */
 	return false;
+}
+
+static void factory_write_work_handler(struct k_work *work)
+{
+	/* Nothing to do */
 }
 
 /**************************************************************************************************/
