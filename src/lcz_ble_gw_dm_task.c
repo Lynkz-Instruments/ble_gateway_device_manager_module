@@ -357,7 +357,8 @@ static void gw_dm_fsm(void)
 		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
 			set_state(GW_DM_STATE_DISCONNECT_DM);
 		} else {
-			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX) ||
+			    !gwto.network_ready) {
 				lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX,
 							    false);
 			} else {
@@ -379,13 +380,15 @@ static void gw_dm_fsm(void)
 #endif
 		break;
 	case GW_DM_STATE_DISCONNECT_DM:
-		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
+		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) ||
+		    !gwto.network_ready) {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
 		} else {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, true);
 		}
 #if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
-		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX) ||
+		    !gwto.network_ready) {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, false);
 		} else {
 			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, true);
@@ -438,6 +441,11 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 					 bool connected, enum lwm2m_rd_client_event client_event)
 {
 	gwto.lwm2m_connection_err = false;
+	bool pet_disconnect_watchdog = false;
+
+	if (gwto.lwm2m_connected && !connected) {
+		pet_disconnect_watchdog = true;
+	}
 
 	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		gwto.lwm2m_connected = connected;
@@ -451,13 +459,13 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		switch (client_event) {
 		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE:
-			pet_connection_watchdog(true);
-			break;
 		case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE:
-			pet_connection_watchdog(true);
+			pet_connection_watchdog(connected);
 			break;
 		case LWM2M_RD_CLIENT_EVENT_DISCONNECT:
-			pet_connection_watchdog(false);
+			if (pet_disconnect_watchdog) {
+				pet_connection_watchdog(connected);
+			}
 			break;
 		case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
 		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
