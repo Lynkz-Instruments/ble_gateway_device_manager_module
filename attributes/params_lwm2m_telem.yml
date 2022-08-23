@@ -87,6 +87,7 @@ attributes:
     x-readable: false
     x-savable: true
     x-writable: true
+    x-obscure-in-show: true
     summary: Pre-shared key
   - name: lwm2m_telem_short_id
     required: true
