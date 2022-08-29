@@ -94,7 +94,6 @@ static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_
 				  size_t *data_len);
 static void date_time_event_handler(const struct date_time_evt *evt);
 static void disconnect_work_cb(struct k_work *work);
-static void reboot_work_cb(struct k_work *work);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -108,7 +107,6 @@ static void random_connect_handler(void);
 static struct k_timer connection_watchdog_timer;
 static struct k_timer connection_watchdog_reboot_timer;
 static K_WORK_DEFINE(disconnect_work, disconnect_work_cb);
-static K_WORK_DEFINE(reboot_work, reboot_work_cb);
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
@@ -501,12 +499,6 @@ static void disconnect_work_cb(struct k_work *work)
 	lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
 }
 
-static void reboot_work_cb(struct k_work *work)
-{
-	ARG_UNUSED(work);
-	lcz_software_reset_after_assert(CONNECTION_WATCHDOG_REBOOT_DELAY_MS);
-}
-
 /* This is an ISR, no time consuming calls can take place in this context */
 static void connection_watchdog_timer_callback(struct k_timer *timer_id)
 {
@@ -516,7 +508,8 @@ static void connection_watchdog_timer_callback(struct k_timer *timer_id)
 		k_work_submit(&disconnect_work);
 	} else if (timer_id == &connection_watchdog_reboot_timer) {
 		LOG_WRN("Connection reboot watchdog expired!");
-		k_work_submit(&reboot_work);
+		/* This is a blocking call, but we don't care, we want to reboot */
+		lcz_software_reset_after_assert(CONNECTION_WATCHDOG_REBOOT_DELAY_MS);
 	}
 }
 
