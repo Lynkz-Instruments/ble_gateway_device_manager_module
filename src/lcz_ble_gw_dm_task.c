@@ -94,6 +94,7 @@ static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_
 				  size_t *data_len);
 static void date_time_event_handler(const struct date_time_evt *evt);
 static void disconnect_work_cb(struct k_work *work);
+static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -556,6 +557,27 @@ static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_
 	return &gwto.time;
 }
 
+static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len)
+{
+	int ret = -ENOTSUP;
+
+	ARG_UNUSED(obj_inst_id);
+	ARG_UNUSED(args);
+	ARG_UNUSED(args_len);
+
+#if defined(CONFIG_ATTR)
+	ret = attr_load((const char *)attr_get_quasi_static(ATTR_ID_factory_load_path), NULL);
+	if (ret < 0) {
+		LOG_ERR("Factory default failed [%d]", ret);
+	} else {
+		LOG_WRN("Factory defaults applied!");
+		lcz_lwm2m_client_reboot();
+	}
+#endif
+
+	return ret;
+}
+
 static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 {
 	LOG_INF("BLE Gateway Device Manager Started");
@@ -605,6 +627,7 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	lwm2m_event_agent.connected_callback = lwm2m_client_connected_event;
 	(void)lcz_lwm2m_client_register_event_callback(&lwm2m_event_agent);
 	lcz_lwm2m_client_register_get_time_callback(current_time_read_cb);
+	lcz_lwm2m_client_register_factory_default_callback(factory_default_callback);
 
 	Framework_RegisterTask(&gwto.msgTask);
 	Framework_StartTimer(&gwto.msgTask);
