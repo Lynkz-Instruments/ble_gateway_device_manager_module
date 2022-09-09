@@ -10,6 +10,7 @@ menuconfig LCZ_BLE_GW_DM
 	depends on LCZ_LWM2M_CLIENT
 	depends on LCZ_SOFTWARE_RESET
 	depends on DATE_TIME
+	depends on LCZ_LED
 
 if LCZ_BLE_GW_DM
 

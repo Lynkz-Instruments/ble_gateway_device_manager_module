@@ -1,0 +1,99 @@
+/**
+ * @file led_config.h
+ *
+ * Copyright (c) 2022 Laird Connectivity
+ *
+ * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
+ */
+#ifndef __LED_CONFIG_H__
+#define __LED_CONFIG_H__
+
+/**************************************************************************************************/
+/* Includes                                                                                       */
+/**************************************************************************************************/
+#include "lcz_led.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**************************************************************************************************/
+/* Global Constants, Macros and Type Definitions                                                  */
+/**************************************************************************************************/
+
+#define LED1_NODE DT_ALIAS(led0)
+#define LED2_NODE DT_ALIAS(led1)
+#define LED3_NODE DT_ALIAS(led2)
+#if defined(CONFIG_BOARD_PINNACLE_100_DVK) || defined(CONFIG_BOARD_BL5340_DVK_CPUAPP)
+#define LED4_NODE DT_ALIAS(led3)
+#endif
+
+/* clang-format off */
+#define LED1_DEV 	DT_GPIO_LABEL(LED1_NODE, gpios)
+#define LED1_FLAGS 	DT_GPIO_FLAGS(LED1_NODE, gpios)
+#define LED1 		DT_GPIO_PIN(LED1_NODE, gpios)
+#define LED2_DEV	DT_GPIO_LABEL(LED2_NODE, gpios)
+#define LED2_FLAGS 	DT_GPIO_FLAGS(LED2_NODE, gpios)
+#define LED2 		DT_GPIO_PIN(LED2_NODE, gpios)
+#define LED3_DEV 	DT_GPIO_LABEL(LED3_NODE, gpios)
+#define LED3_FLAGS 	DT_GPIO_FLAGS(LED3_NODE, gpios)
+#define LED3 		DT_GPIO_PIN(LED3_NODE, gpios)
+#if defined(CONFIG_BOARD_PINNACLE_100_DVK) || defined(CONFIG_BOARD_BL5340_DVK_CPUAPP)
+#define LED4_DEV 	DT_GPIO_LABEL(LED4_NODE, gpios)
+#define LED4_FLAGS 	DT_GPIO_FLAGS(LED4_NODE, gpios)
+#define LED4 		DT_GPIO_PIN(LED4_NODE, gpios)
+#endif
+/* clang-format on */
+
+#if defined(CONFIG_BOARD_PINNACLE_100_DVK) || defined(CONFIG_BOARD_MG100)
+enum led_index {
+	BLUE_LED = 0,
+	GREEN_LED,
+	RED_LED,
+#if defined(CONFIG_BOARD_PINNACLE_100_DVK)
+	GREEN_LED2
+#endif
+};
+
+enum led_type_index {
+	NETWORK_LED = RED_LED,
+	DM_LED = GREEN_LED,
+};
+
+#if defined(CONFIG_BOARD_PINNACLE_100_DVK)
+BUILD_ASSERT(CONFIG_LCZ_NUMBER_OF_LEDS > GREEN_LED2, "LED object too small");
+#else
+BUILD_ASSERT(CONFIG_LCZ_NUMBER_OF_LEDS > RED_LED, "LED object too small");
+#endif
+
+#elif defined(CONFIG_BOARD_BL5340_DVK_CPUAPP)
+enum led_index {
+	BLUE_LED1 = 0,
+	BLUE_LED2,
+	BLUE_LED3,
+	BLUE_LED4,
+};
+
+enum led_type_index {
+	NETWORK_LED = BLUE_LED1,
+	DM_LED = BLUE_LED2,
+};
+
+BUILD_ASSERT(CONFIG_LCZ_NUMBER_OF_LEDS > BLUE_LED4, "LED object too small");
+#else
+#error "Unsupported board selected"
+#endif
+
+/* clang-format off */
+static const struct lcz_led_blink_pattern NETWORK_SEARCH_LED_PATTERN = {
+	.on_time = 40,
+	.off_time = 80,
+	.repeat_count = 2
+};
+/* clang-format on */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __LED_CONFIG_H__ */

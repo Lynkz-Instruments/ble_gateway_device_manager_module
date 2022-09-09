@@ -31,6 +31,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include "lwm2m_telemetry.h"
 #include "memfault_task.h"
 #include "ble_gw_dm_ble.h"
+#include "led_config.h"
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -43,6 +44,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #define CONNECTION_WATCHDOG_TIMEOUT_MULTIPLIER 2
 #define CONNECTION_WATCHDOG_MAX_FALLBACK 300
 #define CONNECTION_WATCHDOG_REBOOT_TIMER_TIMEOUT_MINUTES 60
+#define NETWORK_SEARCH_TIMER_PERIOD_SECONDS 3
 
 enum gw_dm_state {
 	GW_DM_STATE_WAIT_FOR_NETWORK = 0,
@@ -95,6 +97,7 @@ static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_
 static void date_time_event_handler(const struct date_time_evt *evt);
 static void disconnect_work_cb(struct k_work *work);
 static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len);
+static void set_network_ready(bool ready);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -107,11 +110,27 @@ static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, F
 static void random_connect_handler(void);
 static struct k_timer connection_watchdog_timer;
 static struct k_timer connection_watchdog_reboot_timer;
+static struct k_timer network_search_timer;
 static K_WORK_DEFINE(disconnect_work, disconnect_work_cb);
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
 /**************************************************************************************************/
+static void set_network_ready(bool ready)
+{
+	gwto.network_ready = ready;
+
+	if (gwto.network_ready) {
+		k_timer_stop(&network_search_timer);
+		(void)lcz_led_turn_on(NETWORK_LED);
+	} else {
+		(void)lcz_led_turn_off(NETWORK_LED);
+		(void)lcz_led_turn_off(DM_LED);
+		k_timer_start(&network_search_timer, K_SECONDS(NETWORK_SEARCH_TIMER_PERIOD_SECONDS),
+			      K_SECONDS(NETWORK_SEARCH_TIMER_PERIOD_SECONDS));
+	}
+}
+
 static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg)
 {
 	int i;
@@ -223,7 +242,7 @@ static void gw_dm_fsm(void)
 		if (gwto.network_ready) {
 			set_state(GW_DM_STATE_GET_NETWORK_TIME);
 		} else if (timer_expired()) {
-			gwto.network_ready = lcz_nm_network_ready();
+			set_network_ready(lcz_nm_network_ready());
 			LOG_DBG("Re-checking network ready: %s",
 				gwto.network_ready ? "true" : "false");
 			gwto.timer = CONFIG_LCZ_BLE_GW_DM_WAIT_FOR_NETWORK_TIMEOUT;
@@ -428,11 +447,11 @@ static void nm_event_callback(enum lcz_nm_event event)
 	LOG_DBG("Network monitor event %d", event);
 	switch (event) {
 	case LCZ_NM_EVENT_IFACE_DOWN:
-		gwto.network_ready = false;
+		set_network_ready(false);
 		FRAMEWORK_MSG_CREATE_AND_BROADCAST(FWK_ID_BLE_GW_DM, FMC_NETWORK_DISCONNECTED);
 		break;
 	case LCZ_NM_EVENT_IFACE_DNS_ADDED:
-		gwto.network_ready = true;
+		set_network_ready(true);
 		FRAMEWORK_MSG_CREATE_AND_BROADCAST(FWK_ID_BLE_GW_DM, FMC_NETWORK_CONNECTED);
 		break;
 	default:
@@ -452,6 +471,8 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 
 	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
 		gwto.lwm2m_connected = connected;
+		gwto.lwm2m_connected ? (void)lcz_led_turn_on(DM_LED) :
+				       (void)lcz_led_turn_off(DM_LED);
 	}
 #if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
 	else {
@@ -498,6 +519,11 @@ static void disconnect_work_cb(struct k_work *work)
 {
 	ARG_UNUSED(work);
 	lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
+}
+
+static void network_search_timer_callback(struct k_timer *timer_id)
+{
+	lcz_led_blink(NETWORK_LED, &NETWORK_SEARCH_LED_PATTERN);
 }
 
 /* This is an ISR, no time consuming calls can take place in this context */
@@ -581,6 +607,34 @@ static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_
 static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 {
 	LOG_INF("BLE Gateway Device Manager Started");
+
+	/* clang-format off */
+#if defined(CONFIG_BOARD_MG100)
+	struct lcz_led_configuration c[] = {
+		{ BLUE_LED,   LED2_DEV, LED2, LED2_FLAGS },
+		{ GREEN_LED,  LED3_DEV, LED3, LED3_FLAGS },
+		{ RED_LED,    LED1_DEV, LED1, LED1_FLAGS },
+	};
+#elif defined(CONFIG_BOARD_PINNACLE_100_DVK)
+	struct lcz_led_configuration c[] = {
+		{ BLUE_LED,   LED1_DEV, LED1, LED1_FLAGS },
+		{ GREEN_LED,  LED2_DEV, LED2, LED2_FLAGS },
+		{ RED_LED,    LED3_DEV, LED3, LED3_FLAGS },
+		{ GREEN_LED2, LED4_DEV, LED4, LED4_FLAGS }
+	};
+#elif defined(CONFIG_BOARD_BL5340_DVK_CPUAPP) || defined(CONFIG_BOARD_BL5340PA_DVK_CPUAPP)
+	struct lcz_led_configuration c[] = {
+		{ BLUE_LED1, LED1_DEV, LED1, LED1_FLAGS },
+		{ BLUE_LED2, LED2_DEV, LED2, LED2_FLAGS },
+		{ BLUE_LED3, LED3_DEV, LED3, LED3_FLAGS },
+		{ BLUE_LED4, LED4_DEV, LED4, LED4_FLAGS }
+	};
+#else
+#error "Unsupported board selected"
+#endif
+	/* clang-format on */
+	lcz_led_init(c, ARRAY_SIZE(c));
+
 #if defined(CONFIG_ATTR)
 	char *dev_id;
 	dev_id = (char *)attr_get_quasi_static(ATTR_ID_device_id);
@@ -596,11 +650,12 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 
 	k_timer_init(&connection_watchdog_timer, connection_watchdog_timer_callback, NULL);
 	k_timer_init(&connection_watchdog_reboot_timer, connection_watchdog_timer_callback, NULL);
+	k_timer_init(&network_search_timer, network_search_timer_callback, NULL);
 	/* Start the reboot watchdog to reboot the system if we never connect to the server. */
 	k_timer_start(&connection_watchdog_reboot_timer,
 		      K_MINUTES(CONNECTION_WATCHDOG_REBOOT_TIMER_TIMEOUT_MINUTES), K_NO_WAIT);
 
-	gwto.network_ready = false;
+	set_network_ready(false);
 	event_agent.callback = nm_event_callback;
 	lcz_nm_register_event_callback(&event_agent);
 
