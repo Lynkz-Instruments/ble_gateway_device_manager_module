@@ -12,7 +12,6 @@ attributes:
     x-broadcast: false
     x-default: "0"
     x-example: "010203040506"
-    x-lockable: false
     x-prepare: false
     x-readable: true
     x-savable: false
@@ -27,7 +26,6 @@ attributes:
     x-ctype: uint16_t
     x-broadcast: true
     x-default: 0
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -44,7 +42,6 @@ attributes:
     x-ctype: uint16_t
     x-broadcast: true
     x-default: 1
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -59,7 +56,6 @@ attributes:
     x-ctype: uint16_t
     x-broadcast: true
     x-default: 300
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -74,7 +70,6 @@ attributes:
     x-ctype: string
     x-broadcast: false
     x-default: /lfs1/enc/factory_load.txt
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -89,7 +84,6 @@ attributes:
     x-ctype: string
     x-broadcast: true
     x-default: ""
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true

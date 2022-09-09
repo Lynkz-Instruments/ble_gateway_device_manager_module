@@ -13,7 +13,6 @@ attributes:
     x-broadcast: true
     x-default: coap://leshan.eclipseprojects.io:5683
     x-example: coaps://leshan.eclipseprojects.io:5784
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -28,7 +27,6 @@ attributes:
     x-ctype: string
     x-broadcast: true
     x-default: endpoint
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -50,7 +48,6 @@ attributes:
     x-broadcast: true
     x-default: 3
     x-example: 0
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -66,7 +63,6 @@ attributes:
     x-broadcast: true
     x-default: my_device
     x-example: my_device
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -82,7 +78,6 @@ attributes:
     x-broadcast: true
     x-array-size: 16
     x-default: "{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }"
-    x-lockable: true
     x-prepare: false
     x-readable: false
     x-savable: true
@@ -99,7 +94,6 @@ attributes:
     x-broadcast: true
     x-default: 2
     x-example: 101
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
@@ -117,7 +111,6 @@ attributes:
     x-ctype: bool
     x-broadcast: true
     x-default: 0
-    x-lockable: true
     x-prepare: false
     x-readable: true
     x-savable: true
