@@ -98,6 +98,9 @@ static void date_time_event_handler(const struct date_time_evt *evt);
 static void disconnect_work_cb(struct k_work *work);
 static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len);
 static void set_network_ready(bool ready);
+#if defined(CONFIG_LCZ_POWER)
+static DispatchResult_t lcz_sensor_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg);
+#endif
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -150,6 +153,25 @@ static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, F
 
 	return DISPATCH_OK;
 }
+
+#if defined(CONFIG_LCZ_POWER)
+static DispatchResult_t lcz_sensor_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg)
+{
+	int ret;
+	static int mv;
+
+	lcz_power_measure_msg_t *pwr_msg = (lcz_power_measure_msg_t *)pMsg;
+	if (pwr_msg->header.txId == FWK_ID_LCZ_POWER) {
+		mv = (int)(pwr_msg->voltage * 1000.0);
+		ret = lcz_lwm2m_client_set_power_source_voltage(0, &mv);
+		if (ret < 0) {
+			LOG_ERR("Could not set power source voltage [%d]", ret);
+		}
+	}
+
+	return DISPATCH_OK;
+}
+#endif
 
 static void random_connect_handler(void)
 {
@@ -437,6 +459,9 @@ static FwkMsgHandler_t *gw_dm_task_msg_dispatcher(FwkMsgCode_t MsgCode)
 	case FMC_INVALID:                    return Framework_UnknownMsgHandler;
 	case FMC_PERIODIC:                   return gateway_fsm_tick_handler;
 	case FMC_ATTR_CHANGED:               return attr_broadcast_msg_handler;
+#if defined(CONFIG_LCZ_POWER)
+	case FMC_LCZ_SENSOR_MEASURED:	     return lcz_sensor_msg_handler;
+#endif
 	default:                             return NULL;
 	}
 	/* clang-format on */

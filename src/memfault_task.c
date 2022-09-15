@@ -67,7 +67,7 @@ static void memfault_thread(void *arg1, void *arg2, void *arg3)
 #ifdef CONFIG_MODEM_HL7800
 	dev_id = mdm_hl7800_get_imei();
 #else
-	dev_id = attr_get_quasi_static(ATTR_ID_bluetooth_address);
+	dev_id = (char *)attr_get_quasi_static(ATTR_ID_bluetooth_address);
 #endif
 
 	memfault_ncs_device_id_set(dev_id, strlen(dev_id));
