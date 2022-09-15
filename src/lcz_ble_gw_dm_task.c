@@ -401,14 +401,7 @@ static void gw_dm_fsm(void)
 		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
 			set_state(GW_DM_STATE_DISCONNECT_DM);
 		} else {
-			if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX) ||
-			    !gwto.network_ready) {
-				lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX,
-							    false);
-			} else {
-				lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX,
-							    true);
-			}
+			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, false);
 			set_state(GW_DM_STATE_CONNECT_TELEM);
 		}
 		break;
@@ -424,19 +417,9 @@ static void gw_dm_fsm(void)
 #endif
 		break;
 	case GW_DM_STATE_DISCONNECT_DM:
-		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) ||
-		    !gwto.network_ready) {
-			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
-		} else {
-			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, true);
-		}
+		lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
 #if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
-		if (!lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX) ||
-		    !gwto.network_ready) {
-			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, false);
-		} else {
-			lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, true);
-		}
+		lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, false);
 #endif
 		set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 		break;
