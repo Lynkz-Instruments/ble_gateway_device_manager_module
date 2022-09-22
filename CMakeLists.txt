@@ -17,5 +17,6 @@ zephyr_sources_ifdef(CONFIG_LCZ_BLE_GW_DM_MEMFAULT src/memfault_task.c)
 zephyr_sources_ifdef(CONFIG_BT src/ble_gw_dm_ble.c)
 zephyr_sources_ifdef(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M src/lwm2m_telemetry.c)
 zephyr_sources_ifdef(CONFIG_FSU_ENCRYPTED_FILES src/lcz_ble_gw_dm_file_rules.c)
+zephyr_sources_ifdef(CONFIG_MCUMGR src/lcz_ble_gw_dm_smp_rules.c)
 
 endif()

@@ -89,3 +89,45 @@ attributes:
     x-savable: true
     x-writable: true
     summary: "Unique identifier for the device. When firmware boots, if the value is blank (the default value), the firmware will set a unique value for the device using BLE MAC address, IMEI, or some similar value."
+  - name: smp_auth_req
+    required: true
+    schema:
+      maximum: 1
+      minimum: 0
+      type: integer
+    x-ctype: bool
+    x-broadcast: true
+    x-default: 0
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "If true, SMP authentication will be required before accessing any SMP services. If false, all SMP services are available regardless of authentication status."
+  - name: gw_smp_auth_req
+    required: true
+    schema:
+      maximum: 1
+      minimum: 0
+      type: integer
+    x-ctype: bool
+    x-broadcast: true
+    x-default: 0
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "If true, the gateway will require peripherals to authenticate before sending SMP messages"
+  - name: smp_auth_timeout
+    required: true
+    schema:
+      maximum: 86400
+      minimum: 0
+      type: integer
+    x-ctype: uint32_t
+    x-broadcast: true
+    x-default: 300
+    x-prepare: false
+    x-readable: true
+    x-savable: true
+    x-writable: true
+    summary: "SMP authentication will time out after a lapse in SMP commands lasting this number of seconds."

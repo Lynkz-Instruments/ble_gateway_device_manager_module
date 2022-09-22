@@ -219,4 +219,21 @@ config LCZ_GW_DM_FILE_RULES_INIT_PRIORITY
 	  Application init priority for file management rule callback registration
 endif # FSU_ENCRYPTED_FILES
 
+if MCUMGR
+config LCZ_GW_DM_SMP_RULES_INIT_PRIORITY
+	int "SMP rules callback init priority"
+	range 0 99
+	default APPLICATION_INIT_PRIORITY
+	help
+	  Application init priority for SMP permission callback registration
+
+config LCZ_GW_DM_SMP_AUTH_TIMEOUT
+	int "SMP authorization timeout (in secconds)"
+	range 0 86400
+	default 300
+	help
+	  After a period of inactivity specified by this value, an SMP authorization will expire.
+	  This value is used only a backup to the similarly-named attribute.
+endif # MCUMGR
+
 endif # LCZ_BLE_GW_DM
