@@ -28,6 +28,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm_file_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #if defined(CONFIG_LCZ_LWM2M_FS_MANAGEMENT)
 #include "lcz_lwm2m_obj_fs_mgmt.h"
 #endif
+#if defined(CONFIG_LCZ_SHELL_SCRIPT_RUNNER)
+#include "lcz_shell_script_runner.h"
+#endif
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -37,12 +40,19 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm_file_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #define FACTORY_WRITE_DURATION K_SECONDS(1)
 #endif
 
+struct exec_queue_entry_t {
+	void *fifo_reserved;
+	char path[FSU_MAX_ABS_PATH_SIZE + 1];
+};
+
 /**************************************************************************************************/
 /* Local Function Prototypes                                                                      */
 /**************************************************************************************************/
 static int lcz_ble_gw_dm_file_rules_init(const struct device *device);
 static bool gw_dm_file_test(const char *path, bool write);
 static void factory_write_work_handler(struct k_work *work);
+static int gw_dm_file_exec(const char *path);
+static void exec_work_handler(struct k_work *work);
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
@@ -50,6 +60,8 @@ static void factory_write_work_handler(struct k_work *work);
 #ifdef ATTR_ID_factory_load_path
 static K_WORK_DELAYABLE_DEFINE(factory_write_work, factory_write_work_handler);
 #endif
+static K_FIFO_DEFINE(exec_queue);
+static K_WORK_DEFINE(exec_work, exec_work_handler);
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
@@ -76,7 +88,7 @@ static bool gw_dm_file_test(const char *path, bool write)
 	}
 
 	/* Write of the attribute load file is allowed */
-#ifdef ATTR_ID_load_path
+#if defined(ATTR_ID_load_path)
 	load_path = (char *)attr_get_quasi_static(ATTR_ID_load_path);
 	if (strcmp(load_path, simple_path) == 0) {
 		return true;
@@ -84,7 +96,7 @@ static bool gw_dm_file_test(const char *path, bool write)
 #endif
 
 	/* If the factory load file does not exist, it can be written */
-#ifdef ATTR_ID_factory_load_path
+#if defined(ATTR_ID_factory_load_path)
 	load_path = (char *)attr_get_quasi_static(ATTR_ID_factory_load_path);
 	if (strcmp(load_path, simple_path) == 0) {
 		if (k_work_delayable_is_pending(&factory_write_work)) {
@@ -108,6 +120,117 @@ static void factory_write_work_handler(struct k_work *work)
 	/* Nothing to do */
 }
 
+static int gw_dm_file_exec(const char *path)
+{
+	char simple_path[FSU_MAX_ABS_PATH_SIZE + 1];
+	char *attr_path;
+	char *fstr = NULL;
+	struct exec_queue_entry_t *entry;
+	int ret;
+
+	/* Simplify the path */
+	if (fsu_simplify_path(path, simple_path) < 0) {
+		/* If the simplification failed, say we failed */
+		return -EINVAL;
+	}
+
+	/* Attempting to execute the attribute load path will load attributes */
+#if defined(ATTR_ID_load_path)
+	attr_path = (char *)attr_get_quasi_static(ATTR_ID_load_path);
+	if (strcmp(attr_path, simple_path) == 0) {
+		ret = attr_load(simple_path, NULL);
+		if (ret > 0) {
+			lcz_lwm2m_obj_fs_mgmt_exec_complete(0);
+			return 0;
+		} else if (ret == 0) {
+			return -ENOENT;
+		} else {
+			return ret;
+		}
+	}
+#endif
+
+	/* Do not allow the factory load path to work the same way */
+#if defined(ATTR_ID_factory_load_path)
+	attr_path = (char *)attr_get_quasi_static(ATTR_ID_factory_load_path);
+	if (strcmp(attr_path, simple_path) == 0) {
+		/* Use the factory reset execute from Object 3 instead */
+		return -EPERM;
+	}
+#endif
+
+	/* Attempting to execute the attribute dump path will dump attributes */
+#if defined(ATTR_ID_dump_path)
+	attr_path = (char *)attr_get_quasi_static(ATTR_ID_dump_path);
+	if (strcmp(attr_path, simple_path) == 0) {
+		ret = attr_prepare_then_dump(&fstr, ATTR_DUMP_RW);
+		if (ret > 0) {
+			if (fsu_write_abs(simple_path, fstr, strlen(fstr)) > 0) {
+				lcz_lwm2m_obj_fs_mgmt_exec_complete(0);
+				ret = 0;
+			} else {
+				ret = -ENOENT;
+			}
+			k_free(fstr);
+			return ret;
+		} else if (ret == 0) {
+			return -ENOENT;
+		} else {
+			return ret;
+		}
+	}
+#endif
+
+	/* Allow shell scripts to be executed */
+#if defined(CONFIG_LCZ_SHELL_SCRIPT_RUNNER)
+	if (lcz_zsh_is_script(simple_path) == true) {
+		/* Create a queue entry for this script execution */
+		entry = (struct exec_queue_entry_t *)k_malloc(sizeof(struct exec_queue_entry_t));
+		if (entry == NULL) {
+			/* Fail if memory couldn't be allocated */
+			return -ENOMEM;
+		} else {
+			/* Add the script to the queue */
+			memcpy(entry->path, simple_path, sizeof(simple_path));
+			k_fifo_put(&exec_queue, entry);
+
+			/* Schedule the work */
+			k_work_submit(&exec_work);
+
+			/* Success, for now */
+			return 0;
+		}
+	}
+#endif
+
+	/* If everything above didn't work, the execute wasn't allowed */
+	return -EPERM;
+}
+
+static void exec_work_handler(struct k_work *work)
+{
+	struct exec_queue_entry_t *entry;
+	int ret;
+
+	/* Pull an entry off of the fifo */
+	entry = k_fifo_get(&exec_queue, K_FOREVER);
+	if (entry != NULL) {
+		/* Execute the script */
+		ret = lcz_zsh_run_script(entry->path, NULL);
+
+		/* Call the complete callback */
+		lcz_lwm2m_obj_fs_mgmt_exec_complete(ret);
+
+		/* Free the entry */
+		k_free(entry);
+
+		/* If there are more things to execute, reschedule the work */
+		if (!k_fifo_is_empty(&exec_queue)) {
+			k_work_submit(&exec_work);
+		}
+	}
+}
+
 /**************************************************************************************************/
 /* SYS INIT                                                                                       */
 /**************************************************************************************************/
@@ -119,7 +242,8 @@ static int lcz_ble_gw_dm_file_rules_init(const struct device *device)
 	lcz_fs_mgmt_register_evt_cb(gw_dm_file_test);
 #endif
 #if defined(CONFIG_LCZ_LWM2M_FS_MANAGEMENT)
-	lcz_lwm2m_obj_fs_mgmt_register_cb(gw_dm_file_test);
+	lcz_lwm2m_obj_fs_mgmt_reg_perm_cb(gw_dm_file_test);
+	lcz_lwm2m_obj_fs_mgmt_reg_exec_cb(gw_dm_file_exec);
 #endif
 	return 0;
 }
