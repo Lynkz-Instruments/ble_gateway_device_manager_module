@@ -22,6 +22,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm_file_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #if defined(CONFIG_ATTR)
 #include "attr.h"
 #endif
+#if defined(CONFIG_LCZ_PKI_AUTH)
+#include "lcz_pki_auth.h"
+#endif
 #if defined(CONFIG_LCZ_FS_MGMT_FILE_ACCESS_HOOK)
 #include <lcz_fs_mgmt/lcz_fs_mgmt.h>
 #endif
@@ -48,6 +51,9 @@ struct exec_queue_entry_t {
 /**************************************************************************************************/
 /* Local Function Prototypes                                                                      */
 /**************************************************************************************************/
+#if defined(CONFIG_LCZ_PKI_AUTH)
+static bool is_key_file(char *path);
+#endif
 static int lcz_ble_gw_dm_file_rules_init(const struct device *device);
 static bool gw_dm_file_test(const char *path, bool write);
 static void factory_write_work_handler(struct k_work *work);
@@ -66,6 +72,32 @@ static K_WORK_DEFINE(exec_work, exec_work_handler);
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
 /**************************************************************************************************/
+#if defined(CONFIG_LCZ_PKI_AUTH)
+static bool is_key_file(char *path)
+{
+	LCZ_PKI_AUTH_STORE_T store;
+	char key_fname[FSU_MAX_ABS_PATH_SIZE + 1];
+
+	for (store = LCZ_PKI_AUTH_STORE_DEVICE_MANAGEMENT; store < LCZ_PKI_AUTH_STORE__NUM;
+	     store++) {
+		if (lcz_pki_auth_file_name_get(store, LCZ_PKI_AUTH_FILE_PRIVATE_KEY, key_fname,
+					       sizeof(key_fname)) == 0) {
+			if (strcmp(path, key_fname) == 0) {
+				return true;
+			}
+		}
+		if (lcz_pki_auth_file_name_get(store, LCZ_PKI_AUTH_FILE_PUBLIC_KEY, key_fname,
+					       sizeof(key_fname)) == 0) {
+			if (strcmp(path, key_fname) == 0) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+#endif
+
 static bool gw_dm_file_test(const char *path, bool write)
 {
 	char simple_path[FSU_MAX_ABS_PATH_SIZE + 1];
@@ -108,6 +140,13 @@ static bool gw_dm_file_test(const char *path, bool write)
 			k_work_reschedule(&factory_write_work, FACTORY_WRITE_DURATION);
 			return true;
 		}
+	}
+#endif
+
+	/* Writes of private/public key files are allowed */
+#if defined(CONFIG_LCZ_PKI_AUTH)
+	if (is_key_file(simple_path)) {
+		return true;
 	}
 #endif
 
