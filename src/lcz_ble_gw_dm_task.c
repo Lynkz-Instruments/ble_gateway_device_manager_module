@@ -84,6 +84,7 @@ typedef struct gw_dm_task_obj {
 	bool lwm2m_telem_connected;
 #endif
 	uint32_t time;
+	int32_t time_offset;
 } gw_dm_task_obj_t;
 
 #if defined(CONFIG_LCZ_POWER)
@@ -106,6 +107,11 @@ static void connection_watchdog_timer_callback(struct k_timer *timer_id);
 static void pet_connection_watchdog(bool in_connection);
 static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
 				  size_t *data_len);
+static void *current_time_pre_write_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+				       size_t *data_len);
+static int current_time_post_write_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+				      uint8_t *data, uint16_t data_len, bool last_block,
+				      size_t total_size);
 static void date_time_event_handler(const struct date_time_evt *evt);
 static void disconnect_work_cb(struct k_work *work);
 static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len);
@@ -688,11 +694,39 @@ static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_
 	ARG_UNUSED(res_inst_id);
 
 	clock_gettime(CLOCK_REALTIME, &tp);
-	gwto.time = tp.tv_sec;
+	gwto.time = gwto.time_offset + tp.tv_sec;
 	*data_len = 4;
-	LOG_DBG("Epoch time: %d", gwto.time);
+	LOG_DBG("Device time: %d", gwto.time);
 
 	return &gwto.time;
+}
+
+static void *current_time_pre_write_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+				       size_t *data_len)
+{
+	ARG_UNUSED(obj_inst_id);
+	ARG_UNUSED(res_id);
+	ARG_UNUSED(res_inst_id);
+
+	*data_len = sizeof(gwto.time);
+	return &gwto.time;
+}
+
+static int current_time_post_write_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+				      uint8_t *data, uint16_t data_len, bool last_block,
+				      size_t total_size)
+{
+	struct timespec tp;
+
+	if (data_len == 4U) {
+		clock_gettime(CLOCK_REALTIME, &tp);
+
+		gwto.time_offset = *(int32_t *)data - (int32_t)(tp.tv_sec);
+		return 0;
+	}
+
+	LOG_ERR("unknown size %u", data_len);
+	return -EINVAL;
 }
 
 static int factory_default_callback(uint16_t obj_inst_id, uint8_t *args, uint16_t args_len)
@@ -795,6 +829,8 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	lwm2m_event_agent.connected_callback = lwm2m_client_connected_event;
 	(void)lcz_lwm2m_client_register_event_callback(&lwm2m_event_agent);
 	lcz_lwm2m_client_register_get_time_callback(current_time_read_cb);
+	lcz_lwm2m_client_register_pre_write_set_time_callback(current_time_pre_write_cb);
+	lcz_lwm2m_client_register_post_write_set_time_callback(current_time_post_write_cb);
 	lcz_lwm2m_client_register_factory_default_callback(factory_default_callback);
 
 	Framework_StartTimer(&gwto.msgTask);
