@@ -588,6 +588,9 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 	}
 
 	if (lwm2m_client_index == CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX) {
+		if (gwto.lwm2m_connected && !connected) {
+			MFLT_METRICS_ADD(lwm2m_dm_disconnect, 1);
+		}
 		gwto.lwm2m_connected = connected;
 		gwto.lwm2m_connected ? (void)lcz_led_turn_on(DM_LED) :
 				       (void)lcz_led_turn_off(DM_LED);
