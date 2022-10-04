@@ -58,6 +58,7 @@ enum led_index {
 enum led_type_index {
 	NETWORK_LED = RED_LED,
 	DM_LED = GREEN_LED,
+	BLE_LED = BLUE_LED,
 };
 
 #if defined(CONFIG_BOARD_PINNACLE_100_DVK)
@@ -77,6 +78,7 @@ enum led_index {
 enum led_type_index {
 	NETWORK_LED = BLUE_LED1,
 	DM_LED = BLUE_LED2,
+	BLE_LED = BLUE_LED3,
 };
 
 BUILD_ASSERT(CONFIG_LCZ_NUMBER_OF_LEDS > BLUE_LED4, "LED object too small");
@@ -89,6 +91,12 @@ static const struct lcz_led_blink_pattern NETWORK_SEARCH_LED_PATTERN = {
 	.on_time = 40,
 	.off_time = 80,
 	.repeat_count = 2
+};
+
+static const struct lcz_led_blink_pattern BLE_ACTIVITY_LED_PATTERN = {
+	.on_time = 30,
+	.off_time = 20,
+	.repeat_count = 0
 };
 /* clang-format on */
 
