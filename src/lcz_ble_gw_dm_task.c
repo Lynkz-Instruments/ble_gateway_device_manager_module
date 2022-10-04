@@ -204,9 +204,11 @@ static DispatchResult_t lcz_sensor_msg_handler(FwkMsgReceiver_t *pMsgRxer, FwkMs
 	lcz_power_measure_msg_t *pwr_msg = (lcz_power_measure_msg_t *)pMsg;
 	if (pwr_msg->header.txId == FWK_ID_LCZ_POWER) {
 		pwr_src_mv = (int)(pwr_msg->voltage * 1000.0);
-		ret = lcz_lwm2m_client_set_power_source_voltage(0, &pwr_src_mv);
-		if (ret < 0) {
-			LOG_ERR("Could not set power source voltage [%d]", ret);
+		if (pwr_src_mv > PWR_SRC_OFF_THRESHOLD) {
+			ret = lcz_lwm2m_client_set_power_source_voltage(0, &pwr_src_mv);
+			if (ret < 0) {
+				LOG_ERR("Could not set power source voltage [%d]", ret);
+			}
 		}
 #if defined(CONFIG_BOARD_MG100)
 		(void)process_battery_state(lcz_power_get_battery_state(), pwr_src_mv);
@@ -225,7 +227,7 @@ int process_battery_state(uint8_t state, int mv)
 
 	LOG_DBG("Battery state 0x%x", state);
 
-	if ((state & BATTERY_EXT_POWER_STATE) || (mv <= BATTERY_OFF_THRESHOLD)) {
+	if ((state & BATTERY_EXT_POWER_STATE) || (mv <= PWR_SRC_OFF_THRESHOLD)) {
 		pwr_src = LCZ_LWM2M_CLIENT_DEV_PWR_SRC_USB;
 	} else {
 		pwr_src = LCZ_LWM2M_CLIENT_DEV_PWR_SRC_INT_BATT;
@@ -238,7 +240,7 @@ int process_battery_state(uint8_t state, int mv)
 	}
 
 	if (pwr_src == LCZ_LWM2M_CLIENT_DEV_PWR_SRC_USB) {
-		if (mv <= BATTERY_OFF_THRESHOLD) {
+		if (mv <= PWR_SRC_OFF_THRESHOLD) {
 			batt_state = LCZ_LWM2M_CLIENT_DEV_BATT_STAT_NOT_INSTALLED;
 		} else if (state & BATTERY_NOT_CHARGING_STATE) {
 			batt_state = LCZ_LWM2M_CLIENT_DEV_BATT_STAT_CHARGE_COMPLETE;
