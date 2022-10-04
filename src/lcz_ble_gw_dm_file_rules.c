@@ -34,6 +34,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm_file_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #if defined(CONFIG_LCZ_SHELL_SCRIPT_RUNNER)
 #include "lcz_shell_script_runner.h"
 #endif
+#if defined(CONFIG_LCZ_LWM2M_FW_UPDATE_SHELL)
+#include "lcz_lwm2m_fw_update.h"
+#endif
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -106,6 +109,12 @@ static bool gw_dm_file_test(const char *path, bool write)
 	/* Simplify the path */
 	if (fsu_simplify_path(path, simple_path) < 0) {
 		/* If the simplification failed, deny access */
+		return false;
+	}
+
+	/* If the file doesn't start with the mount path, reject it */
+	if (strncmp(simple_path, CONFIG_FSU_MOUNT_POINT, strlen(CONFIG_FSU_MOUNT_POINT)) != 0)
+	{
 		return false;
 	}
 
@@ -283,6 +292,9 @@ static int lcz_ble_gw_dm_file_rules_init(const struct device *device)
 #if defined(CONFIG_LCZ_LWM2M_FS_MANAGEMENT)
 	lcz_lwm2m_obj_fs_mgmt_reg_perm_cb(gw_dm_file_test);
 	lcz_lwm2m_obj_fs_mgmt_reg_exec_cb(gw_dm_file_exec);
+#endif
+#if defined(CONFIG_LCZ_LWM2M_FW_UPDATE_SHELL)
+	lcz_lwm2m_fw_update_shell_reg_perm_cb(gw_dm_file_test);
 #endif
 	return 0;
 }
