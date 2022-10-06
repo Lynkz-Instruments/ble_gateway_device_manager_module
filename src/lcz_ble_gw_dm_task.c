@@ -794,19 +794,6 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	/* clang-format on */
 	lcz_led_init(c, ARRAY_SIZE(c));
 
-#if defined(CONFIG_ATTR)
-	char *dev_id;
-	dev_id = (char *)attr_get_quasi_static(ATTR_ID_device_id);
-	if (strlen(dev_id) < 1) {
-#if defined(CONFIG_MODEM_HL7800)
-		dev_id = mdm_hl7800_get_imei();
-#else
-		dev_id = (char *)attr_get_quasi_static(ATTR_ID_bluetooth_address);
-#endif
-		attr_set_string(ATTR_ID_device_id, dev_id, strlen(dev_id));
-	}
-#endif
-
 	k_timer_init(&connection_watchdog_timer, connection_watchdog_timer_callback, NULL);
 	k_timer_init(&connection_watchdog_reboot_timer, connection_watchdog_timer_callback, NULL);
 	k_timer_init(&network_search_timer, network_search_timer_callback, NULL);
