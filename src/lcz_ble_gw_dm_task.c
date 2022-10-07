@@ -544,6 +544,18 @@ static DispatchResult_t gateway_fsm_tick_handler(FwkMsgReceiver_t *pMsgRxer, Fwk
 	return DISPATCH_OK;
 }
 
+#if defined(CONFIG_LCZ_LWM2M_UTIL_FWK_BROADCAST_ON_CREATE)
+static DispatchResult_t lwm2m_telem_reregister(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg)
+{
+#if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
+	if (lcz_lwm2m_client_is_connected(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX)) {
+		lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_INDEX, false);
+	}
+#endif
+	return DISPATCH_OK;
+}
+#endif
+
 static FwkMsgHandler_t *gw_dm_task_msg_dispatcher(FwkMsgCode_t MsgCode)
 {
 	/* clang-format off */
@@ -556,6 +568,9 @@ static FwkMsgHandler_t *gw_dm_task_msg_dispatcher(FwkMsgCode_t MsgCode)
 #if defined(CONFIG_BOARD_MG100)
     case FMC_LCZ_POWER_BATTERY_STATE:    return lcz_battery_msg_handler;
 #endif
+#endif
+#if defined(CONFIG_LCZ_LWM2M_UTIL_FWK_BROADCAST_ON_CREATE)
+    case FMC_LWM2M_OBJ_CREATED:          return lwm2m_telem_reregister;
 #endif
     default:                             return NULL;
     }
