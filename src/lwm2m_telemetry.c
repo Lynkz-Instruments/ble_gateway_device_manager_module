@@ -6,16 +6,17 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lwm2m_telemetry, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <zephyr.h>
-#include "lcz_lwm2m_client.h"
+#include <zephyr/zephyr.h>
+#include <lcz_lwm2m_client.h>
+
 #if defined(CONFIG_ATTR)
-#include "attr.h"
+#include <attr.h>
 #endif
 
 /**************************************************************************************************/
@@ -74,7 +75,7 @@ int lwm2m_telemetry_init(void)
 		}
 
 		ret = lcz_lwm2m_client_set_secret_key(CONFIG_LCZ_BLE_GW_DM_TELEMETRY_SERVER_INST,
-						      psk, CONFIG_LCZ_LWM2M_SECURITY_KEY_SIZE);
+						      psk, CONFIG_LWM2M_SECURITY_KEY_SIZE);
 		if (ret < 0) {
 			goto exit;
 		}
