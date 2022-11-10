@@ -27,12 +27,17 @@ LOG_MODULE_REGISTER(memfault_task, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /* Local Constant, Macro and Type Definitions                                                     */
 /**************************************************************************************************/
 #define MEMFAULT_DATA_FILE_PATH CONFIG_FSU_MOUNT_POINT "/" CONFIG_LCZ_BLE_GW_DM_MEMFAULT_FILE_NAME
+#define SEND_SYNC_TIMEOUT_MINUTES 10
 
 /**************************************************************************************************/
 /* Local Data Definitions                                                                         */
 /**************************************************************************************************/
 static struct k_timer report_data_timer;
 static uint8_t chunk_buf[CONFIG_LCZ_BLE_GW_DM_MEMFAULT_CHUNK_BUF_SIZE];
+/* Semaphore for API thread safety */
+static K_SEM_DEFINE(send_lock_sem, 1, 1);
+/* Semaphore for data sent sync */
+static K_SEM_DEFINE(send_wait_sem, 0, 1);
 
 /**************************************************************************************************/
 /* Global Data Definitions                                                                        */
@@ -59,6 +64,7 @@ static void memfault_thread(void *arg1, void *arg2, void *arg3)
 	size_t file_size;
 	bool has_coredump;
 	bool delete_file;
+	int ret;
 
 	ARG_UNUSED(arg1);
 	ARG_UNUSED(arg2);
@@ -90,22 +96,28 @@ static void memfault_thread(void *arg1, void *arg2, void *arg3)
 		save_data = false;
 #endif
 		if (save_data) {
-			LOG_INF("Saving Memfault data...");
+			LOG_DBG("Saving Memfault data...");
 			if (fsu_get_file_size_abs(MEMFAULT_DATA_FILE_PATH) >=
 			    CONFIG_LCZ_BLE_GW_DM_MEMFAULT_FILE_MAX_SIZE_BYTES) {
 				delete_file = true;
 			} else {
 				delete_file = false;
 			}
-			(void)lcz_memfault_save_data_to_file(MEMFAULT_DATA_FILE_PATH, chunk_buf,
+			ret = lcz_memfault_save_data_to_file(MEMFAULT_DATA_FILE_PATH, chunk_buf,
 							     sizeof(chunk_buf), delete_file, true,
 							     &file_size, &has_coredump);
-			LOG_INF("Memfault data saved!");
+			if (ret == 0) {
+				LOG_DBG("Memfault data saved!");
+			}
 		} else {
-			LOG_INF("Posting Memfault data...");
-			(void)LCZ_MEMFAULT_POST_DATA_V2(chunk_buf, sizeof(chunk_buf));
-			LOG_INF("Memfault data sent!");
+			LOG_DBG("Posting Memfault data...");
+			ret = LCZ_MEMFAULT_POST_DATA_V2(chunk_buf, sizeof(chunk_buf));
+			if (ret == 0) {
+				LOG_DBG("Memfault data sent!");
+			}
 		}
+
+		k_sem_give(&send_wait_sem);
 
 		/* Reset timer each time data is sent */
 		k_timer_start(&report_data_timer,
@@ -121,6 +133,18 @@ int lcz_ble_gw_dm_memfault_post_data(void)
 {
 	k_thread_resume(memfault);
 	return 0;
+}
+
+int lcz_ble_gw_dm_memfault_post_data_sync(void)
+{
+	int ret;
+
+	k_sem_take(&send_lock_sem, K_FOREVER);
+	k_sem_reset(&send_wait_sem);
+	k_thread_resume(memfault);
+	ret = k_sem_take(&send_wait_sem, K_MINUTES(SEND_SYNC_TIMEOUT_MINUTES));
+	k_sem_give(&send_lock_sem);
+	return ret;
 }
 
 K_THREAD_DEFINE(memfault, CONFIG_LCZ_BLE_GW_DM_MEMFAULT_THREAD_STACK_SIZE, memfault_thread, NULL,

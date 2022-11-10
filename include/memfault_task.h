@@ -26,8 +26,10 @@ extern "C" {
 /**************************************************************************************************/
 #ifdef CONFIG_LCZ_BLE_GW_DM_MEMFAULT
 #define LCZ_BLE_GW_DM_MEMFAULT_POST_DATA lcz_ble_gw_dm_memfault_post_data
+#define LCZ_BLE_GW_DM_MEMFAULT_POST_DATA_SYNC lcz_ble_gw_dm_memfault_post_data_sync
 #else
 #define LCZ_BLE_GW_DM_MEMFAULT_POST_DATA(...)
+#define LCZ_BLE_GW_DM_MEMFAULT_POST_DATA_SYNC(...)
 #endif
 
 /**************************************************************************************************/
@@ -36,10 +38,19 @@ extern "C" {
 #ifdef CONFIG_LCZ_BLE_GW_DM_MEMFAULT
 /**
  * @brief Post any available data to memfault cloud via HTTPS
+ * NOTE: This is a non-blocking call that signals the task to send data asynchronously.
  *
  * @return 0 on success
  */
 int lcz_ble_gw_dm_memfault_post_data(void);
+
+/**
+ * @brief Post any available data to memfault cloud via HTTPS synchronously.
+ * NOTE: This is a blocking call that returns once data has been sent.
+ *
+ * @return 0 on success
+ */
+int lcz_ble_gw_dm_memfault_post_data_sync(void);
 #endif /* CONFIG_LCZ_BLE_GW_DM_MEMFAULT*/
 
 #ifdef __cplusplus

@@ -391,7 +391,7 @@ static void gw_dm_fsm(void)
 		if (!gwto.network_ready) {
 			set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 		} else {
-			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA();
+			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA_SYNC();
 			gwto.timer = gwto.dm_connection_delay_seconds;
 			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
 			LOG_INF("Waiting %d seconds to connect to server",
