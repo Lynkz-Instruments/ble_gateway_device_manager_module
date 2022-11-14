@@ -97,6 +97,7 @@ typedef struct gw_dm_task_obj {
 static void nm_event_callback(enum lcz_nm_event event);
 static FwkMsgHandler_t *gw_dm_task_msg_dispatcher(FwkMsgCode_t MsgCode);
 static DispatchResult_t gateway_fsm_tick_handler(FwkMsgReceiver_t *pMsgRxer, FwkMsg_t *pMsg);
+static bool attribute_changed_filter(const FwkMsg_t *pMsg);
 static void gw_dm_fsm(void);
 static bool timer_expired(void);
 static void set_state(enum gw_dm_state next_state);
@@ -189,12 +190,44 @@ static DispatchResult_t attr_broadcast_msg_handler(FwkMsgReceiver_t *pMsgRxer, F
 			break;
 #endif
 		default:
-			/* Don't care about this attribute. This is a broadcast. */
+			LOG_WRN("Adjust Gateway management attribute changed filter");
 			break;
 		}
 	}
 
 	return DISPATCH_OK;
+}
+
+/* Don't accept attribute changed broadcasts that this task doesn't care about.
+ * This is done to prevent a queue overflow when this task blocks for long periods.
+ */
+static bool attribute_changed_filter(const FwkMsg_t *pMsg)
+{
+	int i;
+	int j;
+	attr_changed_msg_t *pb;
+	const FwkMsgCode_t ACCEPTED_CODES[] = {
+		ATTR_ID_dm_cnx_delay,
+#if defined(CONFIG_LCZ_MODEM_HL7800)
+		ATTR_ID_lte_rsrp,
+		ATTR_ID_lte_sinr,
+#endif
+	};
+
+	if (pMsg->header.msgCode != FMC_ATTR_CHANGED) {
+		return true;
+	}
+
+	pb = (attr_changed_msg_t *)pMsg;
+	for (i = 0; i < pb->count; i++) {
+		for (j = 0; j < ARRAY_SIZE(ACCEPTED_CODES); j++) {
+			if (pb->list[i] == ACCEPTED_CODES[j]) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 #if defined(CONFIG_LCZ_POWER)
@@ -777,9 +810,10 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	gwto.msgTask.rxer.id = FWK_ID_BLE_GW_DM;
 	gwto.msgTask.rxer.rxBlockTicks = K_FOREVER;
 	gwto.msgTask.rxer.pMsgDispatcher = gw_dm_task_msg_dispatcher;
+	gwto.msgTask.rxer.pQueue = &gw_dm_task_queue;
+	gwto.msgTask.rxer.acceptBroadcast = attribute_changed_filter;
 	gwto.msgTask.timerDurationTicks = K_SECONDS(1);
 	gwto.msgTask.timerPeriodTicks = K_MSEC(0);
-	gwto.msgTask.rxer.pQueue = &gw_dm_task_queue;
 	Framework_RegisterTask(&gwto.msgTask);
 
 	/* clang-format off */
