@@ -7,15 +7,17 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(ble_gw_dm_ble, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <init.h>
+#include <zephyr/init.h>
 #include <zephyr/bluetooth/bluetooth.h>
-#include "attr.h"
+#include <zephyr/settings/settings.h>
+#include <attr.h>
+
 #include "ble_gw_dm_ble.h"
 
 /**************************************************************************************************/
@@ -39,6 +41,7 @@ static int ble_gw_dm_device_ble_addr_init(const struct device *device)
 	char addr_str[BT_ADDR_LE_STR_LEN] = { 0 };
 	char bd_addr[BT_ADDR_LE_STR_LEN];
 	size_t size;
+	int load_status;
 
 	ARG_UNUSED(device);
 
@@ -49,6 +52,15 @@ static int ble_gw_dm_device_ble_addr_init(const struct device *device)
 #endif
 
 	(void)bt_enable(NULL);
+
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
+		load_status = settings_load();
+		if (!load_status) {
+			LOG_DBG("(bonding) settings load success");
+		} else {
+			LOG_ERR("(bonding) settings load failed %d", load_status);
+		}
+	}
 
 	bt_id_get(&addr, &count);
 	if (count < 1) {
