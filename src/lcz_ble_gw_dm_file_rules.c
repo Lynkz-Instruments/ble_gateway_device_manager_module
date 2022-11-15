@@ -7,35 +7,35 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lcz_ble_gw_dm_file_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <zephyr.h>
-#include <init.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/init.h>
 
-#include "file_system_utilities.h"
-#include "encrypted_file_storage.h"
+#include <file_system_utilities.h>
+#include <encrypted_file_storage.h>
 
 #if defined(CONFIG_ATTR)
-#include "attr.h"
+#include <attr.h>
 #endif
 #if defined(CONFIG_LCZ_PKI_AUTH)
-#include "lcz_pki_auth.h"
+#include <lcz_pki_auth.h>
 #endif
 #if defined(CONFIG_LCZ_FS_MGMT_FILE_ACCESS_HOOK)
 #include <lcz_fs_mgmt/lcz_fs_mgmt.h>
 #endif
 #if defined(CONFIG_LCZ_LWM2M_FS_MANAGEMENT)
-#include "lcz_lwm2m_obj_fs_mgmt.h"
+#include <lcz_lwm2m_obj_fs_mgmt.h>
 #endif
 #if defined(CONFIG_LCZ_SHELL_SCRIPT_RUNNER)
-#include "lcz_shell_script_runner.h"
+#include <lcz_shell_script_runner.h>
 #endif
 #if defined(CONFIG_LCZ_LWM2M_FW_UPDATE_SHELL)
-#include "lcz_lwm2m_fw_update.h"
+#include <lcz_lwm2m_fw_update.h>
 #endif
 
 /**************************************************************************************************/

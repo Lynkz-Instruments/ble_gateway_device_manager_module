@@ -7,20 +7,21 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(memfault_task, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <zephyr.h>
-#include <drivers/modem/hl7800.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/drivers/modem/hl7800.h>
 #include <memfault_ncs.h>
 #if defined(CONFIG_ATTR)
-#include "attr.h"
+#include <attr.h>
 #endif
-#include "lcz_memfault.h"
-#include "file_system_utilities.h"
+#include <lcz_memfault.h>
+#include <file_system_utilities.h>
+
 #include "memfault_task.h"
 
 /**************************************************************************************************/

@@ -7,25 +7,25 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lcz_ble_gw_dm_smp_rules, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <zephyr.h>
-#include <init.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/init.h>
 #include <mgmt/mgmt.h>
 #if defined(CONFIG_BT_PERIPHERAL)
-#include <bluetooth/conn.h>
+#include <zephyr/bluetooth/conn.h>
 #endif
 
 #if defined(CONFIG_LCZ_PKI_AUTH_SMP_PERIPHERAL)
-#include "lcz_pki_auth_smp.h"
+#include <lcz_pki_auth_smp.h>
 #endif
 
 #if defined(CONFIG_ATTR)
-#include "attr.h"
+#include <attr.h>
 #endif
 
 /**************************************************************************************************/

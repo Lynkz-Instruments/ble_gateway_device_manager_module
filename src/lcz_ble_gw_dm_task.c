@@ -6,31 +6,32 @@
  * SPDX-License-Identifier: LicenseRef-LairdConnectivity-Clause
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
-#include <zephyr.h>
-#include <random/rand32.h>
-#include <posix/time.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/random/rand32.h>
+#include <zephyr/posix/time.h>
 #include <date_time.h>
 #if defined(CONFIG_MODEM_HL7800)
 #include <zephyr/drivers/modem/hl7800.h>
 #endif
 #if defined(CONFIG_ATTR)
-#include "attr.h"
+#include <attr.h>
 #endif
 #if defined(CONFIG_LCZ_POWER)
-#include "lcz_power.h"
+#include <lcz_power.h>
 #endif
-#include "fwk_includes.h"
+#include <fwk_includes.h>
+#include <lcz_lwm2m_client.h>
+#include <lcz_memfault.h>
+#include <lcz_software_reset.h>
+#include <lcz_network_monitor.h>
+
 #include "lcz_ble_gw_dm_task.h"
-#include "lcz_lwm2m_client.h"
-#include "lcz_memfault.h"
-#include "lcz_network_monitor.h"
-#include "lcz_software_reset.h"
 #include "lwm2m_telemetry.h"
 #include "memfault_task.h"
 #include "ble_gw_dm_ble.h"
