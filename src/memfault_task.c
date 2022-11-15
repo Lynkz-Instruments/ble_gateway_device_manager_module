@@ -49,6 +49,7 @@ extern const k_tid_t memfault;
 /* Local Function Prototypes                                                                      */
 /**************************************************************************************************/
 static void report_data_timer_expired(struct k_timer *timer_id);
+static bool save_data(void);
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
@@ -58,10 +59,46 @@ static void report_data_timer_expired(struct k_timer *timer_id)
 	(void)lcz_ble_gw_dm_memfault_post_data();
 }
 
+static int post_or_publish(void)
+{
+	/* Always use HTTP for the first report. */
+	static bool use_mqtt = false;
+	int ret = 0;
+
+	LOG_DBG("Posting Memfault data...");
+
+	if (use_mqtt) {
+		ret = LCZ_MEMFAULT_PUBLISH_DATA(chunk_buf, sizeof(chunk_buf), K_FOREVER);
+	} else {
+		ret = LCZ_MEMFAULT_POST_DATA_V2(chunk_buf, sizeof(chunk_buf));
+	}
+
+	LOG_DBG("Memfault data sent (%s): %d", use_mqtt ? "MQTT" : "HTTP", ret);
+
+	use_mqtt = LCZ_MEMFAULT_MQTT_ENABLED();
+
+	return ret;
+}
+
+static bool save_data(void)
+{
+#ifdef CONFIG_MODEM_HL7800
+#ifdef CONFIG_ATTR
+	if (attr_get_uint32(ATTR_ID_lte_rat, 0) == MDM_RAT_CAT_NB1) {
+		return true;
+	} else
+#endif
+	{
+		return false;
+	}
+#else
+	return false;
+#endif
+}
+
 static void memfault_thread(void *arg1, void *arg2, void *arg3)
 {
 	char *dev_id;
-	bool save_data;
 	size_t file_size;
 	bool has_coredump;
 	bool delete_file;
@@ -84,19 +121,8 @@ static void memfault_thread(void *arg1, void *arg2, void *arg3)
 
 	while (true) {
 		k_thread_suspend(memfault);
-#ifdef CONFIG_MODEM_HL7800
-#ifdef CONFIG_ATTR
-		if (attr_get_uint32(ATTR_ID_lte_rat, 0) == MDM_RAT_CAT_NB1) {
-			save_data = true;
-		} else
-#endif
-		{
-			save_data = false;
-		}
-#else
-		save_data = false;
-#endif
-		if (save_data) {
+
+		if (save_data()) {
 			LOG_DBG("Saving Memfault data...");
 			if (fsu_get_file_size_abs(MEMFAULT_DATA_FILE_PATH) >=
 			    CONFIG_LCZ_BLE_GW_DM_MEMFAULT_FILE_MAX_SIZE_BYTES) {
@@ -111,11 +137,7 @@ static void memfault_thread(void *arg1, void *arg2, void *arg3)
 				LOG_DBG("Memfault data saved!");
 			}
 		} else {
-			LOG_DBG("Posting Memfault data...");
-			ret = LCZ_MEMFAULT_POST_DATA_V2(chunk_buf, sizeof(chunk_buf));
-			if (ret == 0) {
-				LOG_DBG("Memfault data sent!");
-			}
+			post_or_publish();
 		}
 
 		k_sem_give(&send_wait_sem);
