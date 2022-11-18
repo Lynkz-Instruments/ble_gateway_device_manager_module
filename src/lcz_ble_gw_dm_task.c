@@ -695,7 +695,7 @@ static void disconnect_work_cb(struct k_work *work)
 
 static void network_search_timer_callback(struct k_timer *timer_id)
 {
-	lcz_led_blink(NETWORK_LED, &NETWORK_SEARCH_LED_PATTERN);
+	lcz_led_blink(NETWORK_LED, &NETWORK_SEARCH_LED_PATTERN, true);
 }
 
 /* This is an ISR, no time consuming calls can take place in this context */
