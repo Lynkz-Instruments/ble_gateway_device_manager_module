@@ -187,11 +187,10 @@ static int gw_dm_file_exec(const char *path)
 	attr_path = (char *)attr_get_quasi_static(ATTR_ID_load_path);
 	if (strcmp(attr_path, simple_path) == 0) {
 		ret = attr_load(simple_path, NULL);
-		if (ret > 0) {
+		/* Bug 22990: API reverted to support WBX3 */
+		if (ret >= 0) {
 			lcz_lwm2m_obj_fs_mgmt_exec_complete(0);
 			return 0;
-		} else if (ret == 0) {
-			return -ENOENT;
 		} else {
 			return ret;
 		}
