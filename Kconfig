@@ -57,6 +57,22 @@ config LCZ_BLE_GW_DM_TELEM_LWM2M
 	help
 	  Enable a second LwM2M connection for telemetry data.
 
+config LCZ_BLE_GW_DM_LED_CONTROL
+	bool "Use status LEDs"
+	default y
+
+if LCZ_BLE_GW_DM_LED_CONTROL
+
+config LCZ_BLE_GW_DM_NETWORK_STATUS_LED
+	bool "Use network status LED"
+	default y
+
+config LCZ_BLE_GW_DM_DEVICE_MANAGEMENT_STATUS_LED
+	bool "Use device management status LED"
+	default y
+
+endif
+
 if LCZ_BLE_GW_DM_TELEM_LWM2M
 
 config LCZ_BLE_GW_DM_TELEMETRY_INDEX

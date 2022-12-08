@@ -152,10 +152,16 @@ static void set_network_ready(bool ready)
 
 	if (gwto.network_ready) {
 		k_timer_stop(&network_search_timer);
+#if defined(CONFIG_LCZ_BLE_GW_DM_NETWORK_STATUS_LED)
 		(void)lcz_led_turn_on(NETWORK_LED);
+#endif
 	} else {
+#if defined(CONFIG_LCZ_BLE_GW_DM_NETWORK_STATUS_LED)
 		(void)lcz_led_turn_off(NETWORK_LED);
+#endif
+#if defined(CONFIG_LCZ_BLE_GW_DM_DEVICE_MANAGEMENT_STATUS_LED)
 		(void)lcz_led_turn_off(DM_LED);
+#endif
 		k_timer_start(&network_search_timer, K_SECONDS(NETWORK_SEARCH_TIMER_PERIOD_SECONDS),
 			      K_SECONDS(NETWORK_SEARCH_TIMER_PERIOD_SECONDS));
 	}
@@ -643,8 +649,10 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 			MFLT_METRICS_ADD(lwm2m_dm_disconnect, 1);
 		}
 		gwto.lwm2m_connected = connected;
+#if defined(CONFIG_LCZ_BLE_GW_DM_DEVICE_MANAGEMENT_STATUS_LED)
 		gwto.lwm2m_connected ? (void)lcz_led_turn_on(DM_LED) :
 				       (void)lcz_led_turn_off(DM_LED);
+#endif
 	}
 #if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
 	else {
@@ -695,7 +703,9 @@ static void disconnect_work_cb(struct k_work *work)
 
 static void network_search_timer_callback(struct k_timer *timer_id)
 {
+#if defined(CONFIG_LCZ_BLE_GW_DM_NETWORK_STATUS_LED)
 	lcz_led_blink(NETWORK_LED, &NETWORK_SEARCH_LED_PATTERN, true);
+#endif
 }
 
 /* This is an ISR, no time consuming calls can take place in this context */
