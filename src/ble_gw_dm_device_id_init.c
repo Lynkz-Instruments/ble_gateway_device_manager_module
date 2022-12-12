@@ -39,7 +39,7 @@ static int ble_gw_dm_device_id_init(const struct device *device)
 #if defined(CONFIG_BOARD_MG100) || defined(CONFIG_BOARD_PINNACLE_100_DVK)
 	dev_id_0 = NRF_FICR->DEVICEID[0];
 	dev_id_1 = NRF_FICR->DEVICEID[1];
-#elif defined(CONFIG_BOARD_BL5340_DVK_CPUAPP)
+#elif defined(CONFIG_BOARD_BL5340_DVK_CPUAPP) || defined(CONFIG_BOARD_NRF7002DK_NRF5340_CPUAPP)
 	dev_id_0 = NRF_FICR->INFO.DEVICEID[0];
 	dev_id_1 = NRF_FICR->INFO.DEVICEID[1];
 #else

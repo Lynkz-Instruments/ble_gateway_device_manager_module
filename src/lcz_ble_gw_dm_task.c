@@ -848,6 +848,11 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
         { BLUE_LED3, LED3_DEV, LED3, LED3_FLAGS },
         { BLUE_LED4, LED4_DEV, LED4, LED4_FLAGS }
     };
+#elif defined(CONFIG_BOARD_NRF7002DK_NRF5340_CPUAPP)
+    struct lcz_led_configuration c[] = {
+        { GREEN_LED1,  LED1_DEV, LED1, LED1_FLAGS },
+        { GREEN_LED2,  LED2_DEV, LED2, LED2_FLAGS },
+    };
 #else
 #error "Unsupported board selected"
 #endif

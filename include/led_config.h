@@ -21,29 +21,44 @@ extern "C" {
 /* Global Constants, Macros and Type Definitions                                                  */
 /**************************************************************************************************/
 
-#define LED1_NODE DT_ALIAS(led0)
-#define LED2_NODE DT_ALIAS(led1)
-#define LED3_NODE DT_ALIAS(led2)
 #if defined(CONFIG_BOARD_PINNACLE_100_DVK) || defined(CONFIG_BOARD_BL5340_DVK_CPUAPP)
-#define LED4_NODE DT_ALIAS(led3)
+#define NUM_LEDS 4
+#elif defined(CONFIG_BOARD_MG100)
+#define NUM_LEDS 3
+#elif defined(CONFIG_BOARD_NRF7002DK_NRF5340_CPUAPP)
+#define NUM_LEDS 2
+#else
+#error "Undefined board"
 #endif
 
-/* clang-format off */
+
+#if (NUM_LEDS >= 1)
+#define LED1_NODE DT_ALIAS(led0)
 #define LED1_DEV 	DEVICE_DT_GET(DT_GPIO_CTLR(LED1_NODE, gpios))
 #define LED1_FLAGS 	DT_GPIO_FLAGS(LED1_NODE, gpios)
 #define LED1 		DT_GPIO_PIN(LED1_NODE, gpios)
+#endif
+
+#if (NUM_LEDS >= 2)
+#define LED2_NODE DT_ALIAS(led1)
 #define LED2_DEV	DEVICE_DT_GET(DT_GPIO_CTLR(LED2_NODE, gpios))
 #define LED2_FLAGS 	DT_GPIO_FLAGS(LED2_NODE, gpios)
 #define LED2 		DT_GPIO_PIN(LED2_NODE, gpios)
+#endif
+
+#if (NUM_LEDS >= 3)
+#define LED3_NODE DT_ALIAS(led2)
 #define LED3_DEV 	DEVICE_DT_GET(DT_GPIO_CTLR(LED3_NODE, gpios))
 #define LED3_FLAGS 	DT_GPIO_FLAGS(LED3_NODE, gpios)
 #define LED3 		DT_GPIO_PIN(LED3_NODE, gpios)
-#if defined(CONFIG_BOARD_PINNACLE_100_DVK) || defined(CONFIG_BOARD_BL5340_DVK_CPUAPP)
+#endif
+
+#if (NUM_LEDS >= 4)
+#define LED4_NODE DT_ALIAS(led3)
 #define LED4_DEV 	DEVICE_DT_GET(DT_GPIO_CTLR(LED4_NODE, gpios))
 #define LED4_FLAGS 	DT_GPIO_FLAGS(LED4_NODE, gpios)
 #define LED4 		DT_GPIO_PIN(LED4_NODE, gpios)
 #endif
-/* clang-format on */
 
 #if defined(CONFIG_BOARD_PINNACLE_100_DVK) || defined(CONFIG_BOARD_MG100)
 enum led_index {
@@ -82,6 +97,19 @@ enum led_type_index {
 };
 
 BUILD_ASSERT(CONFIG_LCZ_NUMBER_OF_LEDS > BLUE_LED4, "LED object too small");
+#elif defined(CONFIG_BOARD_NRF7002DK_NRF5340_CPUAPP)
+enum led_index {
+	GREEN_LED1 = 0,
+	GREEN_LED2,
+};
+
+enum led_type_index {
+	NETWORK_LED = GREEN_LED1,
+	DM_LED = GREEN_LED2,
+	BLE_LED = -1,
+};
+
+BUILD_ASSERT(CONFIG_LCZ_NUMBER_OF_LEDS > GREEN_LED2, "LED object too small");
 #else
 #error "Unsupported board selected"
 #endif
