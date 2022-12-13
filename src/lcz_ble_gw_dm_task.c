@@ -42,6 +42,9 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 /**************************************************************************************************/
 #define GW_DM_TASK_QUEUE_DEPTH 8
 #define DM_CONNECTION_DELAY_FALLBACK 5
+#define DM_CONNECTION_DELAY_MIN_RAND 30
+#define DM_CNX_RETRIES_FALLBACK 3
+#define DM_CNX_BACKOFF_RETRIES_FALLBACK 5
 #define RAND_RANGE(min, max) ((sys_rand32_get() % (max - min + 1)) + min)
 
 #define CONNECTION_WATCHDOG_REBOOT_DELAY_MS 1000
@@ -68,6 +71,7 @@ enum gw_dm_state {
 	GW_DM_STATE_DISCONNECT_TELEM,
 #endif
 	GW_DM_STATE_IDLE,
+	GW_DM_STATE_IDLE_STAY,
 	GW_DM_STATE_DISCONNECT_DM,
 };
 
@@ -86,6 +90,7 @@ typedef struct gw_dm_task_obj {
 #endif
 	uint32_t time;
 	int32_t time_offset;
+	uint16_t cnx_tries;
 } gw_dm_task_obj_t;
 
 #if defined(CONFIG_LCZ_POWER)
@@ -331,7 +336,7 @@ static void random_connect_handler(void)
 	LOG_DBG("min: %u max: %u delay: %u", min, max, delay);
 
 	if (delay == 0) {
-		delay = RAND_RANGE(min, max);
+		delay = RAND_RANGE(DM_CONNECTION_DELAY_MIN_RAND, max);
 		(void)attr_set_uint32(ATTR_ID_dm_cnx_delay, delay);
 	}
 }
@@ -353,6 +358,8 @@ static char *state_to_string(enum gw_dm_state state)
 		return "Wait for connection";
 	case GW_DM_STATE_IDLE:
 		return "Idle";
+	case GW_DM_STATE_IDLE_STAY:
+		return "Idle Stay";
 	case GW_DM_STATE_DISCONNECT_DM:
 		return "Disconnect DM";
 #if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
@@ -432,6 +439,20 @@ static void gw_dm_fsm(void)
 			set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 		} else {
 			LCZ_BLE_GW_DM_MEMFAULT_POST_DATA_SYNC();
+			if (gwto.cnx_tries >=
+			    attr_get_uint32(ATTR_ID_dm_cnx_retries, DM_CNX_RETRIES_FALLBACK) +
+				    attr_get_uint32(ATTR_ID_dm_cnx_backoff_retries,
+						    DM_CNX_BACKOFF_RETRIES_FALLBACK)) {
+				/* We have exhausted our the number of times to retry the connection. */
+				LOG_WRN("Connection retry limit reached (%d), wait in idle.",
+					gwto.cnx_tries);
+				set_state(GW_DM_STATE_IDLE_STAY);
+				break;
+			} else if (gwto.cnx_tries >=
+				   *(uint8_t *)attr_get_quasi_static(ATTR_ID_dm_cnx_retries)) {
+				gwto.dm_connection_delay_seconds *= *(float *)attr_get_quasi_static(
+					ATTR_ID_dm_cnx_backoff_multi);
+			}
 			gwto.timer = gwto.dm_connection_delay_seconds;
 			set_state(GW_DM_STATE_WAIT_BEFORE_DM_CONNECTION);
 			LOG_INF("Waiting %d seconds to connect to server",
@@ -465,6 +486,8 @@ static void gw_dm_fsm(void)
 						       CONFIG_LCZ_LWM2M_TLS_TAG);
 			if (ret < 0) {
 				set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
+				gwto.cnx_tries++;
+				MFLT_METRICS_ADD(lwm2m_dm_connect_fail, 1);
 			} else {
 				set_state(GW_DM_STATE_WAIT_FOR_CONNECTION);
 			}
@@ -474,9 +497,14 @@ static void gw_dm_fsm(void)
 		if (!gwto.network_ready) {
 			set_state(GW_DM_STATE_DISCONNECT_DM);
 		} else if (gwto.lwm2m_connection_err) {
-			set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
+			gwto.cnx_tries++;
+			MFLT_METRICS_ADD(lwm2m_dm_connect_fail, 1);
+			set_state(GW_DM_STATE_DISCONNECT_DM);
 		} else {
 			if (gwto.lwm2m_connected) {
+				gwto.cnx_tries = 0;
+				gwto.dm_connection_delay_seconds = attr_get_uint32(
+					ATTR_ID_dm_cnx_delay, DM_CONNECTION_DELAY_FALLBACK);
 #if defined(CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M)
 #if defined(CONFIG_LCZ_LWM2M_CLIENT_ENABLE_ATTRIBUTES)
 				gwto.telem_enabled =
@@ -493,6 +521,8 @@ static void gw_dm_fsm(void)
 				set_state(GW_DM_STATE_IDLE);
 #endif
 			} else if (timer_expired()) {
+				gwto.cnx_tries++;
+				MFLT_METRICS_ADD(lwm2m_dm_connect_fail, 1);
 				set_state(GW_DM_STATE_DISCONNECT_DM);
 			}
 		}
@@ -564,6 +594,9 @@ static void gw_dm_fsm(void)
 			set_state(GW_DM_STATE_DISCONNECT_TELEM);
 		}
 #endif
+		break;
+	case GW_DM_STATE_IDLE_STAY:
+		/* wait here until reboot watchdog fires */
 		break;
 	case GW_DM_STATE_DISCONNECT_DM:
 		lcz_lwm2m_client_disconnect(CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, false);
@@ -825,6 +858,7 @@ static void ble_gw_dm_thread(void *arg1, void *arg2, void *arg3)
 	gwto.msgTask.rxer.acceptBroadcast = attribute_changed_filter;
 	gwto.msgTask.timerDurationTicks = K_SECONDS(1);
 	gwto.msgTask.timerPeriodTicks = K_MSEC(0);
+	gwto.cnx_tries = 0;
 	Framework_RegisterTask(&gwto.msgTask);
 
 	/* clang-format off */

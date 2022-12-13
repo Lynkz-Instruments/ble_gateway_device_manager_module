@@ -131,3 +131,42 @@ attributes:
     x-savable: true
     x-writable: true
     summary: "SMP authentication will time out after a lapse in SMP commands lasting this number of seconds."
+  - name: dm_cnx_retries
+    summary: "Failed connection retries"
+    description: "The number of times to retry a failed DM connection before going into backoff mode."
+    required: true
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 255
+    x-ctype: uint8_t
+    x-default: 3
+    x-readable: true
+    x-savable: true
+    x-writable: true
+  - name: dm_cnx_backoff_multi
+    summary: "Connection backoff multiplier"
+    description: "When in backoff mode, this multiplier will be applied to dm_cnx_delay for each connection retry."
+    required: true
+    schema:
+      type: number
+      minimum: 1.0
+      maximum: 50.0
+    x-ctype: float
+    x-default: 2.0
+    x-readable: true
+    x-savable: true
+    x-writable: true
+  - name: dm_cnx_backoff_retries
+    summary: "Connection backoff retries"
+    description: "The number of times to retry a failed DM connection in backoff mode."
+    required: true
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 255
+    x-ctype: uint8_t
+    x-default: 5
+    x-readable: true
+    x-savable: true
+    x-writable: true
