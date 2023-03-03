@@ -50,6 +50,7 @@ extern const k_tid_t memfault;
 /**************************************************************************************************/
 static void report_data_timer_expired(struct k_timer *timer_id);
 static bool save_data(void);
+static char *get_mflt_transport_str(enum memfault_transport type);
 
 /**************************************************************************************************/
 /* Local Function Definitions                                                                     */
@@ -62,21 +63,35 @@ static void report_data_timer_expired(struct k_timer *timer_id)
 static int post_or_publish(void)
 {
 	/* Always use HTTP for the first report. */
-	static bool use_mqtt = false;
+	static enum memfault_transport mflt_transport = MEMFAULT_TRANSPORT_HTTP;
 	int ret = 0;
 
-	LOG_DBG("Posting Memfault data...");
+	uint32_t transport_attr = attr_get_uint32(ATTR_ID_memfault_transport, 0);
 
-	if (use_mqtt) {
-		ret = LCZ_MEMFAULT_PUBLISH_DATA(chunk_buf, sizeof(chunk_buf), K_FOREVER);
+	if(transport_attr != MEMFAULT_TRANSPORT_NONE) {
+		LOG_DBG("Posting Memfault data...");
+
+		if (mflt_transport == MEMFAULT_TRANSPORT_MQTT) {
+			ret = LCZ_MEMFAULT_PUBLISH_DATA(chunk_buf, sizeof(chunk_buf), K_FOREVER);
+		} else if (mflt_transport == MEMFAULT_TRANSPORT_COAP) {
+			ret = LCZ_MEMFAULT_COAP_PUBLISH_DATA(chunk_buf, sizeof(chunk_buf), K_FOREVER);
+		} else {
+			ret = LCZ_MEMFAULT_POST_DATA_V2(chunk_buf, sizeof(chunk_buf));
+		}
+
+		LOG_DBG("Memfault data sent (%s): %d", get_mflt_transport_str(mflt_transport), ret);
 	} else {
-		ret = LCZ_MEMFAULT_POST_DATA_V2(chunk_buf, sizeof(chunk_buf));
+		LOG_DBG("Memfault publish disabled (%s)", get_mflt_transport_str(mflt_transport));
 	}
 
-	LOG_DBG("Memfault data sent (%s): %d", use_mqtt ? "MQTT" : "HTTP", ret);
-
-	use_mqtt = LCZ_MEMFAULT_MQTT_ENABLED();
-
+	if (LCZ_MEMFAULT_MQTT_ENABLED()) {
+		mflt_transport = MEMFAULT_TRANSPORT_MQTT;
+	} else if(LCZ_MEMFAULT_COAP_ENABLED()) {
+		mflt_transport = MEMFAULT_TRANSPORT_COAP;
+	} else {
+		mflt_transport = MEMFAULT_TRANSPORT_HTTP;
+	}
+	
 	return ret;
 }
 
@@ -84,6 +99,13 @@ static bool save_data(void)
 {
 #ifdef CONFIG_MODEM_HL7800
 #ifdef CONFIG_ATTR
+#if defined(ATTR_ID_store_memfault_data)
+	if(attr_get_uint32(ATTR_ID_store_memfault_data, 0) == 1) {
+		return true;
+	} else {
+		return false;
+	}
+#endif
 	if (attr_get_uint32(ATTR_ID_lte_rat, 0) == MDM_RAT_CAT_NB1) {
 		return true;
 	} else
@@ -147,6 +169,22 @@ static void memfault_thread(void *arg1, void *arg2, void *arg3)
 			      K_SECONDS(CONFIG_LCZ_BLE_GW_DM_MEMFAULT_REPORT_PERIOD_SECONDS),
 			      K_SECONDS(CONFIG_LCZ_BLE_GW_DM_MEMFAULT_REPORT_PERIOD_SECONDS));
 	}
+}
+
+static char * get_mflt_transport_str(enum memfault_transport type)
+{
+    switch(type) {
+        case MEMFAULT_TRANSPORT_NONE:
+		return "NONE";
+        case MEMFAULT_TRANSPORT_HTTP:
+		return "HTTP";
+	    case MEMFAULT_TRANSPORT_MQTT:
+		return "MQTT";
+        case MEMFAULT_TRANSPORT_COAP:
+		return "COAP";
+        default:
+		return "";
+    }
 }
 
 /**************************************************************************************************/
