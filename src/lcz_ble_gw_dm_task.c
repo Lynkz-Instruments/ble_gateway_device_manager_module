@@ -36,6 +36,7 @@ LOG_MODULE_REGISTER(lcz_ble_gw_dm, CONFIG_LCZ_BLE_GW_DM_LOG_LEVEL);
 #include "memfault_task.h"
 #include "ble_gw_dm_ble.h"
 #include "led_config.h"
+#include "lcz_pki_auth.h"
 
 /**************************************************************************************************/
 /* Local Constant, Macro and Type Definitions                                                     */
@@ -111,7 +112,7 @@ static char *state_to_string(enum gw_dm_state state);
 static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_client_index,
 					 bool connected, enum lwm2m_rd_client_event client_event);
 static void connection_watchdog_timer_callback(struct k_timer *timer_id);
-static void pet_connection_watchdog(bool in_connection);
+static void pet_connection_watchdog(bool in_connection, int srv_obj_inst);
 static void *current_time_read_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
 				  size_t *data_len);
 static void *current_time_pre_write_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
@@ -410,6 +411,12 @@ static void date_time_event_handler(const struct date_time_evt *evt)
 	}
 }
 
+int lcz_lwm2m_dm_load_certs(struct lwm2m_ctx *client_ctx)
+{
+	return lcz_pki_auth_tls_credential_load(LCZ_PKI_AUTH_STORE_DEVICE_MANAGEMENT,
+						client_ctx->tls_tag, false);
+}
+
 static void gw_dm_fsm(void)
 {
 	int ret;
@@ -483,7 +490,7 @@ static void gw_dm_fsm(void)
 						       CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX,
 						       CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX, ep_name,
 						       LCZ_LWM2M_CLIENT_TRANSPORT_UDP,
-						       CONFIG_LCZ_LWM2M_TLS_TAG);
+						       CONFIG_LCZ_LWM2M_TLS_TAG, lcz_lwm2m_dm_load_certs);
 			if (ret < 0) {
 				set_state(GW_DM_STATE_WAIT_FOR_NETWORK);
 				gwto.cnx_tries++;
@@ -548,7 +555,7 @@ static void gw_dm_fsm(void)
 						       CONFIG_LCZ_BLE_GW_DM_TELEMETRY_SERVER_INST,
 						       CONFIG_LCZ_BLE_GW_DM_TELEMETRY_SERVER_INST,
 						       ep_name, LCZ_LWM2M_CLIENT_TRANSPORT_UDP,
-						       CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M_TLS_TAG);
+						       CONFIG_LCZ_BLE_GW_DM_TELEM_LWM2M_TLS_TAG, lcz_lwm2m_dm_load_certs);
 			if (ret < 0) {
 				if (!lcz_lwm2m_client_is_connected(
 					    CONFIG_LCZ_BLE_GW_DM_CLIENT_INDEX)) {
@@ -697,11 +704,11 @@ static void lwm2m_client_connected_event(struct lwm2m_ctx *client, int lwm2m_cli
 		switch (client_event) {
 		case LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE:
 		case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE:
-			pet_connection_watchdog(connected);
+			pet_connection_watchdog(connected, client->srv_obj_inst);
 			break;
 		case LWM2M_RD_CLIENT_EVENT_DISCONNECT:
 			if (pet_disconnect_watchdog) {
-				pet_connection_watchdog(connected);
+				pet_connection_watchdog(connected, client->srv_obj_inst);
 			}
 			break;
 		case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_REG_FAILURE:
@@ -755,13 +762,15 @@ static void connection_watchdog_timer_callback(struct k_timer *timer_id)
 	}
 }
 
-static void pet_connection_watchdog(bool in_connection)
+static void pet_connection_watchdog(bool in_connection, int srv_obj_inst)
 {
 	int ret;
 	uint32_t timeout;
+	char obj_path[LWM2M_MAX_PATH_STR_LEN];
 
 	if (in_connection) {
-		ret = lwm2m_engine_get_u32("1/0/1", &timeout);
+		snprintk(obj_path, sizeof(obj_path), "1/%d/1", srv_obj_inst);
+		ret = lwm2m_engine_get_u32(obj_path, &timeout);
 		if (ret < 0) {
 			LOG_ERR("Could not read lifetime");
 		}
