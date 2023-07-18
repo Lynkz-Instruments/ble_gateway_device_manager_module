@@ -422,6 +422,11 @@ static void gw_dm_fsm(void)
 	int ret;
 	char *ep_name;
 
+#if defined(CONFIG_LCZ_BLE_GW_DM_PSM)
+	//LOG_INF("BLE_GW Power Save mode, deactivating lwm2m bootstrap and heartbeat");
+	set_state(GW_DM_STATE_IDLE_STAY);
+#endif
+
 	switch (gwto.state) {
 	case GW_DM_STATE_WAIT_FOR_NETWORK:
 		if (gwto.network_ready) {
